@@ -15,7 +15,6 @@ import {
 } from './store'
 
 const MAP_URL = 'https://www.igta5.com/images/gtav-map-atlas-huge.jpg'
-const ROXWOOD_MAP_URL = '/assets/maps/roxwood-map.png'
 const categories = ['Menus', 'Burgers', 'Accompagnements', 'Boissons', 'Desserts']
 
 const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(value)
@@ -201,9 +200,7 @@ function SanAndreasMap({ marker, onMarker, restaurantMarkers = false, restaurant
       <div className="map-controls"><button onClick={() => setZoomAround(zoom + .35)}><Plus /></button><button onClick={() => setZoomAround(zoom - .35)}><Minus /></button><button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}><MapPin size={15} /></button></div>
       <div className="sa-map" onWheel={wheel} onMouseDown={startDrag} onMouseMove={moveDrag} onMouseUp={stopDrag} onMouseLeave={stopDrag} onClick={click} style={{ '--map-zoom': zoom, '--map-pan-x': `${pan.x}px`, '--map-pan-y': `${pan.y}px` }}>
         <div className="map-stage">
-          <img className="main-map-layer" src={MAP_URL} alt="Carte de San Andreas et Roxwood" draggable="false" />
-          <img className="roxwood-map-layer" src={ROXWOOD_MAP_URL} alt="Carte de Roxwood" draggable="false" />
-          <span className="roxwood-label">ROXWOOD</span>
+          <img src={MAP_URL} alt="Carte de San Andreas" draggable="false" />
           {restaurantMarkers && restaurants.filter(item => item.active).map(item => <button className="map-pin restaurant-pin" style={{ left: `${item.x}%`, top: `${item.y}%` }} key={item.id} title={item.name}><Store size={14} /></button>)}
           {marker && <span className="map-pin delivery-pin" style={{ left: `${marker.x}%`, top: `${marker.y}%` }}><MapPin /></span>}
         </div>
