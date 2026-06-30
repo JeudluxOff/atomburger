@@ -1,8 +1,20 @@
+
 import { createClient } from '@supabase/supabase-js'
 import { announcementsSeed, customerSeed, docsSeed, eventSeed, menuSeed, orderSeed, promotionsSeed, restaurantsSeed, staffSeed, timeEntrySeed } from './data'
 
-const url = import.meta.env.VITE_SUPABASE_URL || __SUPABASE_URL__
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY || __SUPABASE_ANON_KEY__
+const url =
+  import.meta.env.VITE_SUPABASE_URL ||
+  import.meta.env.STORAGE_SUPABASE_URL ||
+  import.meta.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL ||
+  ''
+
+const key =
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
+  import.meta.env.STORAGE_SUPABASE_ANON_KEY ||
+  import.meta.env.STORAGE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.NEXT_PUBLIC_STORAGE_SUPABASE_ANON_KEY ||
+  import.meta.env.NEXT_PUBLIC_STORAGE_SUPABASE_PUBLISHABLE_KEY ||
+  ''
 export const supabase = url && key ? createClient(url, key) : null
 export const isDemoMode = !supabase
 
