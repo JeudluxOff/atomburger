@@ -14,6 +14,10 @@ const serviceRoleKey =
   process.env.STORAGE_SUPABASE_SECRET_KEY ||
   process.env.Storage_SUPABASE_SECRET_KEY
 
+const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, '').toLowerCase().trim()
+const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
+const isManagerRole = role => managerRoles.includes(normalizeRole(role))
+
 export default async function handler(req, res) {
   if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: 'Configuration Supabase incomplete.' })
   const token = (req.headers.authorization || '').replace('Bearer ', '')
@@ -28,7 +32,7 @@ export default async function handler(req, res) {
   if (req.method === 'POST') {
     const { email, password, firstName, lastName, username, role, position = '', restaurant = '', phone = '', iban = '' } = req.body || {}
     if (!email || !password || !firstName || !lastName || !role) return res.status(400).json({ error: 'Informations incompletes.' })
-    const permissions = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Manager'].includes(role) ? ['calendar', 'orders', 'admin'] : ['calendar', 'orders']
+    const permissions = isManagerRole(role) ? ['calendar', 'orders', 'admin'] : ['calendar', 'orders']
     const { data, error } = await admin.auth.admin.createUser({
       email, password, email_confirm: true,
       user_metadata: { first_name: firstName, last_name: lastName, role_type: 'employee', role, permissions },

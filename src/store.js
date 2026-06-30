@@ -12,13 +12,19 @@ const seeds = {
   staff: staffSeed,
   customers: customerSeed,
   time_entries: timeEntrySeed,
+  cash_entries: [],
   events: eventSeed,
   orders: orderSeed,
   announcements: announcementsSeed,
   documents: docsSeed,
   promotions: promotionsSeed,
+  applications: [],
   settings: { acceptingOrders: true },
 }
+
+const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, '').toLowerCase().trim()
+const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
+const isManagerRole = role => managerRoles.includes(normalizeRole(role))
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -50,6 +56,11 @@ export async function insertRecord(collection, record) {
   if (!supabase) {
     const rows = readLocal(collection)
     writeLocal(collection, [record, ...rows])
+    return record
+  }
+  if (collection === 'applications') {
+    const { error } = await supabase.from(collection).insert(record)
+    if (error) throw error
     return record
   }
   const { data, error } = await supabase.from(collection).insert(record).select().single()
@@ -100,7 +111,7 @@ export async function updateSettings(value) {
 
 export async function createEmployee(form) {
   if (!supabase) {
-    const permissions = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Manager'].includes(form.role) ? ['calendar', 'orders', 'admin'] : ['calendar', 'orders']
+    const permissions = isManagerRole(form.role) ? ['calendar', 'orders', 'admin'] : ['calendar', 'orders']
     const employee = { ...form, id: `staff-${crypto.randomUUID()}`, permissions }
     writeLocal('staff', [...readLocal('staff'), employee])
     return employee

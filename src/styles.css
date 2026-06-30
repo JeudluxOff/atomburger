@@ -104,8 +104,11 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .product-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .product-card { min-height: 260px; display: grid; grid-template-columns: 115px 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: white; }
 .product-card.unavailable { opacity: .57; }
-.product-visual { display: flex; flex-direction: column; justify-content: space-between; padding: 17px 13px; color: var(--yellow); background: var(--red); }
-.product-visual span { color: white; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.product-visual { position: relative; display: flex; flex-direction: column; justify-content: space-between; padding: 17px 13px; color: var(--yellow); background: var(--red); overflow: hidden; }
+.product-visual img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.product-visual.has-image::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.06), rgba(0,0,0,.55)); }
+.product-visual svg, .product-visual span { position: relative; z-index: 1; }
+.product-visual span { align-self: flex-start; color: white; font-size: 10px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 5px rgba(0,0,0,.45); }
 .product-info { display: flex; flex-direction: column; padding: 20px; }
 .product-info h3 { margin: 0 0 7px; font-size: 28px; }
 .product-info p { flex: 1; color: var(--muted); line-height: 1.45; font-size: 14px; }
@@ -129,26 +132,32 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .danger-text { color: #8f1321; background: #ffe2e6; }
 
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 20px; background: rgba(10, 7, 5, .76); backdrop-filter: blur(5px); }
-.modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto; border-radius: 8px; background: var(--paper); box-shadow: 0 30px 90px rgba(0,0,0,.4); }
+.modal { width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto; border-radius: 8px; color: var(--ink); background: var(--paper); box-shadow: 0 30px 90px rgba(0,0,0,.4); }
 .modal.wide { width: min(1120px, 100%); }
 .modal > header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid var(--line); background: var(--paper); }
 .modal > header h2 { margin: 0; font-size: 30px; }
+.modal > header button { color: var(--red); }
 .checkout-grid { display: grid; grid-template-columns: .75fr 1.25fr; gap: 22px; padding: 22px; }
 .checkout-fields { display: grid; align-content: start; gap: 12px; }
 .checkout-summary { display: flex; justify-content: space-between; padding: 14px; border-radius: 6px; background: #f2e7d8; }
 .form-error { color: #a61124; font-size: 13px; font-weight: 700; }
 .success-text { display: inline-block; color: #167a38; font-weight: 700; margin-left: 12px; }
 .modal-form { display: grid; gap: 13px; padding: 22px; }
+.modal-form label { color: #3b2016; }
+.modal-form .check-line { color: #3b2016; }
 .modal-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 4px; }
 
 .sa-map-shell { position: relative; min-width: 0; }
-.sa-map { position: relative; height: min(58vh, 600px); overflow: hidden; border-radius: 7px; cursor: crosshair; background: #182029; border: 3px solid #2f231e; }
-.sa-map::after { content: "SAN ANDREAS"; position: absolute; left: 16px; bottom: 13px; padding: 5px 8px; color: white; background: rgba(0,0,0,.7); font-family: "Barlow Condensed"; font-size: 19px; font-weight: 800; pointer-events: none; }
-.map-stage { position: absolute; inset: 0; transform: scale(var(--map-zoom)); transform-origin: 50% 50%; transition: transform .2s ease; }
-.map-stage > img { width: 100%; height: 100%; object-fit: contain; user-select: none; pointer-events: none; }
+.sa-map { position: relative; height: min(58vh, 600px); overflow: hidden; border-radius: 7px; cursor: grab; background: #182029; border: 3px solid #2f231e; }
+.sa-map:active { cursor: grabbing; }
+.sa-map::after { content: "SAN ANDREAS + ROXWOOD"; position: absolute; left: 16px; bottom: 13px; padding: 5px 8px; color: white; background: rgba(0,0,0,.7); font-family: "Barlow Condensed"; font-size: 19px; font-weight: 800; pointer-events: none; z-index: 8; }
+.map-stage { position: absolute; inset: 0; transform: translate(var(--map-pan-x), var(--map-pan-y)) scale(var(--map-zoom)); transform-origin: 50% 50%; }
+.main-map-layer { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: contain; user-select: none; pointer-events: none; }
+.roxwood-map-layer { position: absolute; z-index: 2; left: 1.5%; top: 0.5%; width: 46%; height: auto; max-height: 42%; object-fit: contain; user-select: none; pointer-events: none; filter: drop-shadow(0 12px 18px rgba(0,0,0,.45)); border-radius: 4px; opacity: .96; }
+.roxwood-label { position: absolute; z-index: 4; left: 3.5%; top: 2.5%; padding: 4px 8px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; background: rgba(0,0,0,.72); color: white; font-family: "Barlow Condensed"; font-size: 17px; font-weight: 900; letter-spacing: .08em; pointer-events: none; }
 .map-controls { position: absolute; z-index: 3; top: 11px; left: 11px; display: grid; gap: 4px; }
 .map-controls button { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #cabbaa; border-radius: 4px; background: white; }
-.map-pin { position: absolute; z-index: 2; transform: translate(-50%, -100%); display: grid; place-items: center; }
+.map-pin { position: absolute; z-index: 6; transform: translate(-50%, -100%); display: grid; place-items: center; }
 .delivery-pin { width: 35px; height: 35px; color: white; border-radius: 50% 50% 50% 0; background: var(--red); border: 3px solid white; transform: translate(-50%, -100%) rotate(-45deg); box-shadow: 0 3px 13px rgba(0,0,0,.55); }
 .delivery-pin svg { width: 18px; transform: rotate(45deg); }
 .restaurant-pin { width: 30px; height: 30px; color: var(--ink); border-radius: 50%; background: var(--yellow); border: 3px solid white; box-shadow: 0 3px 12px rgba(0,0,0,.5); }
@@ -306,11 +315,22 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .document-card { padding: 20px; }.document-card > svg { color: var(--yellow); }.document-card > span { display: block; margin-top: 24px; color: #9f9189; font-size: 11px; }.document-card h3 { font-size: 25px; }.document-card p { color: #9f9189; }.document-card button { padding: 8px 10px; border-radius: 4px; color: var(--ink); background: var(--yellow); font-weight: 800; }
 .announcement-list { display: grid; gap: 10px; }
 .announcement-list article { padding: 20px; }.announcement-list header { display: flex; justify-content: space-between; }.announcement-list h3 { margin: 0; font-size: 25px; }.announcement-list p, .announcement-list small { color: #a99a92; }
+.application-admin-list { display: grid; gap: 12px; }
+.application-admin-card, .tax-panel { padding: 20px; border: 1px solid var(--dark-line); border-radius: 7px; background: var(--panel); }
+.application-admin-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.application-admin-card h3 { margin: 0; font-size: 27px; }
+.application-admin-card header span { color: #a99a92; font-size: 12px; }
+.application-admin-card select, .tax-panel input { max-width: 230px; color: #f7eee7; border-color: #54453d; background: #12100f; }
+.application-admin-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.application-admin-card dl > div { padding: 10px; border-radius: 5px; background: #141211; }
+.application-admin-card dt { color: #8f8179; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.application-admin-card dd { margin: 4px 0 0; color: #f4eae4; font-size: 12px; }
+.application-admin-card p { margin: 0; color: #cfc3bc; line-height: 1.55; }
 .hours-layout { display: grid; grid-template-columns: minmax(300px, .8fr) minmax(360px, 1.2fr); gap: 14px; align-items: start; }
 .hours-form, .hours-history { display: grid; gap: 13px; padding: 22px; border: 1px solid var(--dark-line); border-radius: 7px; background: var(--panel); }
 .hours-form > svg { width: 44px; height: 44px; color: var(--yellow); }
 .hours-form h2, .hours-history h2 { margin: 0; font-size: 29px; }
-.hours-form input, .hours-form textarea { color: #f7eee7; border-color: #54453d; background: #12100f; }
+.hours-form input, .hours-form select, .hours-form textarea { color: #f7eee7; border-color: #54453d; background: #12100f; }
 .hours-history article { display: grid; grid-template-columns: 120px 1fr; gap: 15px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--dark-line); }
 .hours-history article:last-child { border-bottom: 0; }
 .hours-history article > div { display: grid; gap: 3px; }
@@ -356,6 +376,27 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .open-control p { color: #9f9189; }
 .open-button, .close-button { min-width: 230px; padding: 13px 18px; border-radius: 5px; color: white; font-weight: 900; }
 .open-button { background: #168943; }.close-button { background: #a4172a; }
+.tax-panel, .revenue-panel { max-width: 920px; display: grid; gap: 16px; }
+.tax-panel > div:first-child { display: grid; gap: 7px; }
+.tax-panel svg, .revenue-panel svg { color: var(--yellow); }
+.tax-panel h2, .revenue-panel h2 { margin: 0; font-size: 32px; }
+.tax-panel p, .revenue-panel p { margin: 0; color: #a99a92; }
+.tax-panel label { max-width: 280px; color: #f7eee7; }
+.tax-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tax-stats article { padding: 14px; border-radius: 6px; background: #141211; }
+.tax-stats span { display: block; color: #9f9189; font-size: 11px; }
+.tax-stats strong { display: block; margin-top: 5px; color: var(--yellow); font-size: 24px; }
+.revenue-panel { padding: 20px; border: 1px solid var(--dark-line); border-radius: 7px; background: var(--panel); }
+.revenue-panel > header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.revenue-panel > header > div { display: grid; gap: 7px; }
+.revenue-panel > header > strong { color: var(--yellow); font-size: 30px; white-space: nowrap; }
+.revenue-ranking { display: grid; gap: 9px; }
+.revenue-ranking article { display: grid; grid-template-columns: 48px minmax(150px, 1fr) minmax(320px, 1.2fr); gap: 12px; align-items: center; padding: 13px; border-radius: 6px; background: #141211; }
+.revenue-ranking article > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); background: var(--yellow); font-weight: 900; }
+.revenue-ranking small { display: block; margin-top: 3px; color: #9f9189; }
+.revenue-ranking dl { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; }
+.revenue-ranking dt { color: #8f8179; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+.revenue-ranking dd { margin: 4px 0 0; color: #f4eae4; font-weight: 800; }
 
 @media (max-width: 1100px) {
   .public-nav { display: none; }
@@ -392,7 +433,9 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
   .logout-button { margin-top: 10px; }
   .employee-topbar { position: relative; }
   .orders-list { max-height: 380px; }
-  .hours-layout, .people-admin-grid { grid-template-columns: 1fr; }
+  .hours-layout, .people-admin-grid, .tax-stats, .application-admin-card dl, .revenue-ranking article, .revenue-ranking dl { grid-template-columns: 1fr; }
+  .application-admin-card > header { flex-direction: column; }
+  .revenue-panel > header { flex-direction: column; }
   .calendar-grid > button, .calendar-grid > .blank { min-height: 78px; padding: 5px; }
   .calendar-grid i { max-width: 100%; font-size: 0; height: 7px; padding: 0; }
   .calendar-grid i::first-letter { font-size: 0; }

@@ -1,4 +1,7 @@
 export const menuSeed = [
+  { id: 'menu-classic', category: 'Menus', name: 'Menu Atom Classic', description: 'Atom Classic, frites classiques et boisson au choix.', price: 13.9, imageUrl: '', available: true, featured: true },
+  { id: 'menu-double', category: 'Menus', name: 'Menu Double Atom', description: 'Double Atom, frites cheddar et boisson au choix.', price: 17.9, imageUrl: '', available: true, featured: true },
+  { id: 'menu-family', category: 'Menus', name: 'Menu Family Atom', description: 'Deux burgers, deux accompagnements et deux boissons.', price: 29.9, imageUrl: '', available: true },
   { id: 'classic', category: 'Burgers', name: 'Atom Classic', description: 'Steak grille, cheddar, salade, tomate et sauce Atom.', price: 8.9, available: true, featured: true },
   { id: 'double', category: 'Burgers', name: 'Double Atom', description: 'Deux steaks, double cheddar, oignons, cornichons et sauce maison.', price: 12.9, available: true, featured: true },
   { id: 'spicy', category: 'Burgers', name: 'Spicy San Andreas', description: 'Steak grille, cheddar, jalapenos et sauce rouge relevee.', price: 10.9, available: true },
@@ -17,6 +20,7 @@ export const menuSeed = [
 ]
 
 export const restaurantsSeed = [
+  { id: 'roxwood', name: 'Roxwood Nord', hours: '12:00 - 23:00', phone: '555-ATOM-00', x: 23, y: 19, active: true },
   { id: 'vinewood', name: 'Vinewood Boulevard', hours: '10:00 - 02:00', phone: '555-ATOM-01', x: 47.5, y: 72.5, active: true },
   { id: 'vespucci', name: 'Vespucci Beach', hours: '11:00 - 03:00', phone: '555-ATOM-02', x: 37, y: 82, active: true },
   { id: 'legion', name: 'Legion Square', hours: '09:00 - 00:00', phone: '555-ATOM-03', x: 52, y: 82, active: true },
