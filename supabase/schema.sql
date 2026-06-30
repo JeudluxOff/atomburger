@@ -8,7 +8,170 @@ create table if not exists profiles (
   "lastName" text not null default '',
   phone text default '',
   address text default '',
+  role_type text not null default 'customer' check (role_type in ('customer', 'employee'))-- Run this file once in the Supabase SQL editor.
+create extension if not exists pgcrypto;
+
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  "firstName" text not null default '',
+  "lastName" text not null default '',
+  phone text default '',
+  address text default '',
   role_type text not null default 'customer' check (role_type in ('customer', 'employee')),
+  role text,
+  permissions jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists menu (
+  id text primary key, category text not null, name text not null, description text, price numeric(10,2) not null,
+  available boolean not null default true, featured boolean not null default false, created_at timestamptz not null default now()
+);
+create table if not exists restaurants (
+  id text primary key, name text not null, hours text, phone text, x numeric, y numeric, active boolean default true, created_at timestamptz not null default now()
+);
+create table if not exists promotions (
+  id text primary key, title text not null, offer text, description text, active boolean default true, created_at timestamptz not null default now()
+);
+create table if not exists staff (
+  id text primary key, auth_id uuid references auth.users(id) on delete cascade, username text unique, email text unique,
+  "firstName" text not null, "lastName" text not null, role text not null, permissions jsonb default '["calendar","orders"]'::jsonb,
+  position text default '', restaurant text default '', phone text default '', iban text default '', created_at timestamptz not null default now()
+);
+create table if not exists events (
+  id text primary key, title text not null, date date not null, start time, "end" time, type text, location text, notes text,
+  "authorId" text, created_at timestamptz not null default now()
+);
+create table if not exists orders (
+  id text primary key, "customerId" uuid references auth.users(id), "customerName" text not null, phone text not null, address text not null,
+  "markerX" numeric not null, "markerY" numeric not null, note text, status text not null default 'Nouvelle', "assignedTo" text,
+  paid boolean not null default false, items jsonb not null, total numeric(10,2) not null, "createdAt" timestamptz not null default now(), created_at timestamptz not null default now()
+);
+create table if not exists announcements (
+  id text primary key, title text not null, body text not null, priority text, date timestamptz default now(), created_at timestamptz not null default now()
+);
+create table if not exists documents (
+  id text primary key, title text not null, type text, access text, url text, created_at timestamptz not null default now()
+);
+create table if not exists settings (
+  id text primary key default 'global', "acceptingOrders" boolean not null default true, created_at timestamptz not null default now()
+);
+create table if not exists time_entries (
+  id text primary key, "employeeId" text not null, date date not null, hours numeric(5,2) not null check (hours > 0 and hours <= 24),
+  comment text default '', "createdAt" timestamptz not null default now(), created_at timestamptz not null default now()
+);
+
+-- Safe upgrades when the schema already existed before this version.
+alter table profiles add column if not exists address text default '';
+alter table staff add column if not exists position text default '';
+alter table staff add column if not exists restaurant text default '';
+alter table staff add column if not exists phone text default '';
+alter table staff add column if not exists iban text default '';
+alter table orders add column if not exists paid boolean not null default false;
+
+create or replace function public.is_employee() returns boolean language sql stable security definer set search_path = public as $$
+  select exists(select 1 from profiles where id = auth.uid() and role_type = 'employee');
+$$;
+create or replace function public.is_manager() returns boolean language sql stable security definer set search_path = public as $$
+  select exists(select 1 from profiles where id = auth.uid() and role_type = 'employee' and permissions ? 'admin');
+$$;
+
+alter table profiles enable row level security;
+alter table menu enable row level security;
+alter table restaurants enable row level security;
+alter table promotions enable row level security;
+alter table staff enable row level security;
+alter table events enable row level security;
+alter table orders enable row level security;
+alter table announcements enable row level security;
+alter table documents enable row level security;
+alter table settings enable row level security;
+alter table time_entries enable row level security;
+
+create policy "public reads menu" on menu for select using (true);
+create policy "public reads restaurants" on restaurants for select using (true);
+create policy "public reads promotions" on promotions for select using (true);
+create policy "public reads settings" on settings for select using (true);
+create policy "employee manages menu" on menu for all using (is_manager()) with check (is_manager());
+create policy "employee manages restaurants" on restaurants for all using (is_manager()) with check (is_manager());
+create policy "employee manages promotions" on promotions for all using (is_manager()) with check (is_manager());
+create policy "manager manages settings" on settings for all using (is_manager()) with check (is_manager());
+create policy "profile reads own" on profiles for select using (id = auth.uid() or is_employee());
+create policy "profile updates own" on profiles for update using (id = auth.uid());
+create policy "manager updates customers" on profiles for update using (is_manager());
+create policy "employees read staff" on staff for select using (is_employee());
+create policy "managers update staff" on staff for update using (is_manager()) with check (is_manager());
+create policy "managers delete staff" on staff for delete using (is_manager());
+create policy "employees read events" on events for select using (is_employee());
+create policy "employees create events" on events for insert with check (is_employee());
+create policy "employees update events" on events for update using (is_employee());
+create policy "managers delete events" on events for delete using (is_manager());
+create policy "customers create orders" on orders for insert with check (auth.uid() = "customerId");
+create policy "customers read own orders" on orders for select using (auth.uid() = "customerId" or is_employee());
+create policy "employees update orders" on orders for update using (is_employee());
+create policy "employees read hours" on time_entries for select using (is_employee());
+create policy "employees add hours" on time_entries for insert with check (is_employee());
+create policy "managers manage hours" on time_entries for all using (is_manager()) with check (is_manager());
+create policy "employees read announcements" on announcements for select using (is_employee());
+create policy "managers manage announcements" on announcements for all using (is_manager()) with check (is_manager());
+create policy "employees read documents" on documents for select using (is_employee());
+create policy "managers manage documents" on documents for all using (is_manager()) with check (is_manager());
+
+create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into profiles (id, email, "firstName", "lastName", phone, role_type, role, permissions)
+  values (
+    new.id, new.email,
+    coalesce(new.raw_user_meta_data->>'first_name', ''), coalesce(new.raw_user_meta_data->>'last_name', ''),
+    coalesce(new.raw_user_meta_data->>'phone', ''), coalesce(new.raw_user_meta_data->>'role_type', 'customer'),
+    new.raw_user_meta_data->>'role', coalesce(new.raw_user_meta_data->'permissions', '[]'::jsonb)
+  );
+  return new;
+end;
+$$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
+
+insert into settings (id) values ('global') on conflict (id) do nothing;
+
+-- Live synchronization between every connected browser.
+do $$
+declare table_name text;
+begin
+  foreach table_name in array array['orders','staff','profiles','events','announcements','documents','time_entries','menu','restaurants','promotions','settings']
+  loop
+    if not exists (
+      select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = table_name
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', table_name);
+    end if;
+  end loop;
+end $$;
+
+-- Seed the public content after creating the tables.
+insert into menu (id, category, name, description, price, available, featured) values
+('classic','Burgers','Atom Classic','Steak grille, cheddar, salade, tomate et sauce Atom.',8.90,true,true),
+('double','Burgers','Double Atom','Deux steaks, double cheddar, oignons, cornichons et sauce maison.',12.90,true,true),
+('spicy','Burgers','Spicy San Andreas','Steak grille, cheddar, jalapenos et sauce rouge relevee.',10.90,true,false),
+('fries','Accompagnements','Frites Atom','Frites dorees et salees.',3.50,true,false),
+('ecola','Boissons','eCola','Le classique bien frais.',2.50,true,false),
+('shake','Desserts','Jumbo Shake','Vanille, chocolat ou fraise.',4.90,true,false)
+on conflict (id) do nothing;
+
+insert into restaurants (id,name,hours,phone,x,y) values
+('vinewood','Vinewood Boulevard','10:00 - 02:00','555-ATOM-01',47.5,72.5),
+('vespucci','Vespucci Beach','11:00 - 03:00','555-ATOM-02',37,82),
+('legion','Legion Square','09:00 - 00:00','555-ATOM-03',52,82),
+('sandy','Sandy Shores','12:00 - 23:00','555-ATOM-04',59,47)
+on conflict (id) do nothing;
+
+insert into promotions (id,title,offer,description) values
+('p1','Duo Atom','19,90 $','Deux Atom Classic, deux frites et deux eCola.'),
+('p2','Spicy Night','-20 %','Reduction sur le Spicy San Andreas apres 22 h.'),
+('p3','Shake Friday','1 achete = 1 offert','Tous les vendredis sur les Jumbo Shakes.')
+on conflict (id) do nothing;
+,
   role text,
   permissions jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now()
