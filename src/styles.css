@@ -45,6 +45,179 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .icon-btn:hover { background: rgba(127, 100, 80, .12); }
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 200; background: #14833b; color: white; border-radius: 6px; padding: 13px 17px; display: flex; gap: 9px; align-items: center; box-shadow: 0 18px 50px rgba(0, 0, 0, .25); font-weight: 700; }
 
+.site-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: white;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255,217,26,.38), transparent 0 12%, transparent 34%),
+    linear-gradient(115deg, #060303 0%, #220307 27%, #d20b24 28%, #d20b24 63%, #ff8b00 100%);
+  animation: intro-exit .75s ease 2.85s forwards;
+}
+.site-intro::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  opacity: .18;
+  background-image: repeating-linear-gradient(135deg, transparent 0 18px, #fff 19px 20px);
+  animation: intro-stripes 1.8s linear infinite;
+}
+.site-intro::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,.95) 0 4%, rgba(255,217,26,.72) 5% 11%, transparent 12%);
+  opacity: 0;
+  animation: intro-flash .8s ease 2.34s forwards;
+}
+.intro-stage {
+  position: relative;
+  z-index: 4;
+  width: min(850px, 82vw);
+  min-height: min(520px, 78vh);
+  display: grid;
+  place-items: center;
+}
+.intro-brand {
+  width: min(720px, 76vw);
+  filter: drop-shadow(0 18px 0 rgba(0,0,0,.28)) drop-shadow(0 0 34px rgba(255,217,26,.34));
+  transform: scale(.2) rotate(-8deg);
+  opacity: 0;
+  animation: intro-logo .95s cubic-bezier(.16, 1.2, .28, 1) .35s forwards, intro-shake .18s linear 1.28s 3;
+}
+.intro-character {
+  position: absolute;
+  right: clamp(-70px, -3vw, -12px);
+  bottom: clamp(-52px, -4vw, -22px);
+  width: min(320px, 34vw);
+  opacity: 0;
+  transform: translateX(120px) rotate(7deg) scale(.86);
+  filter: drop-shadow(12px 12px 0 rgba(0,0,0,.32));
+  animation: intro-character .75s cubic-bezier(.2, 1.15, .2, 1) 1.12s forwards;
+}
+.intro-copy {
+  position: absolute;
+  left: clamp(6px, 4vw, 70px);
+  bottom: clamp(35px, 6vw, 80px);
+  display: grid;
+  gap: 3px;
+  padding: 12px 15px;
+  border-left: 4px solid var(--yellow);
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(6px);
+  transform: translateY(22px);
+  opacity: 0;
+  animation: intro-copy .45s ease 1.65s forwards;
+}
+.intro-copy span {
+  color: var(--yellow);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.intro-copy strong {
+  font-family: "Barlow Condensed", Impact, sans-serif;
+  font-size: clamp(34px, 6vw, 72px);
+  line-height: .9;
+  text-transform: uppercase;
+}
+.intro-burst {
+  position: absolute;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--yellow);
+  box-shadow: 0 0 0 0 rgba(255,217,26,.65);
+  animation: intro-burst 1.15s ease-out .55s forwards;
+}
+.intro-orbit {
+  position: absolute;
+  z-index: 2;
+  width: min(600px, 72vw);
+  aspect-ratio: 1.9;
+  border: 5px solid rgba(255,255,255,.92);
+  border-left-color: rgba(255,217,26,.95);
+  border-right-color: rgba(255,217,26,.95);
+  border-radius: 50%;
+  opacity: 0;
+  filter: drop-shadow(0 0 20px rgba(255,217,26,.35));
+}
+.orbit-one { transform: rotate(24deg) scale(.2); animation: intro-orbit-one 1.35s cubic-bezier(.2, 1.1, .2, 1) .62s forwards; }
+.orbit-two { transform: rotate(-22deg) scale(.2); animation: intro-orbit-two 1.35s cubic-bezier(.2, 1.1, .2, 1) .76s forwards; }
+.intro-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  opacity: .16;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,.8) 0 1px, transparent 1px 6px);
+  mix-blend-mode: overlay;
+}
+.intro-skip {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 8;
+  padding: 9px 12px;
+  color: white;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 999px;
+  background: rgba(0,0,0,.34);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@keyframes intro-logo {
+  0% { opacity: 0; transform: scale(.2) rotate(-8deg); }
+  68% { opacity: 1; transform: scale(1.08) rotate(1deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes intro-character {
+  0% { opacity: 0; transform: translateX(120px) rotate(7deg) scale(.86); }
+  100% { opacity: 1; transform: translateX(0) rotate(-2deg) scale(1); }
+}
+@keyframes intro-copy {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes intro-shake {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(5px, -2px) scale(1); }
+  50% { transform: translate(-4px, 2px) scale(1); }
+  75% { transform: translate(2px, 3px) scale(1); }
+}
+@keyframes intro-burst {
+  0% { transform: scale(.2); box-shadow: 0 0 0 0 rgba(255,217,26,.65); opacity: 1; }
+  100% { transform: scale(90); box-shadow: 0 0 0 38px rgba(255,217,26,0); opacity: 0; }
+}
+@keyframes intro-orbit-one {
+  0% { opacity: 0; transform: rotate(24deg) scale(.2); }
+  35% { opacity: 1; }
+  100% { opacity: 1; transform: rotate(384deg) scale(1); }
+}
+@keyframes intro-orbit-two {
+  0% { opacity: 0; transform: rotate(-22deg) scale(.2); }
+  35% { opacity: 1; }
+  100% { opacity: 1; transform: rotate(-382deg) scale(1); }
+}
+@keyframes intro-stripes {
+  to { transform: translate(42px, 42px); }
+}
+@keyframes intro-flash {
+  0%, 55% { opacity: 0; transform: scale(.2); }
+  70% { opacity: .92; transform: scale(1.9); }
+  100% { opacity: 0; transform: scale(3.8); }
+}
+@keyframes intro-exit {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.05); visibility: hidden; }
+}
+
 .public-header { height: 72px; position: sticky; top: 0; z-index: 50; padding: 0 4vw; display: flex; align-items: center; gap: 22px; border-bottom: 4px solid var(--red); background: rgba(255, 253, 245, .96); backdrop-filter: blur(12px); box-shadow: 0 5px 20px rgba(51, 24, 12, .09); }
 .public-nav { display: flex; align-items: stretch; gap: 3px; flex: 1; justify-content: center; height: 68px; }
 .public-nav button { color: #3c2920; background: transparent; padding: 0 13px; font-size: 14px; font-weight: 800; border-bottom: 3px solid transparent; }
