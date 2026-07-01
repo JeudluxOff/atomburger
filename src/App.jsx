@@ -11,7 +11,7 @@ import {
 } from './data'
 import {
   createEmployee, deleteRecord, insertRecord, isDemoMode, loadCollection, loadCustomers, loadSettings, removeEmployee, supabase,
-  replaceCollection, signIn, signOut, signUpCustomer, updateCustomer, updateEmployee, updateRecord, updateSettings,
+  signIn, signOut, signUpCustomer, updateCustomer, updateEmployee, updateRecord, updateSettings,
 } from './store'
 
 const MAP_URL = 'https://www.igta5.com/images/gtav-map-atlas-huge.jpg'
@@ -31,10 +31,6 @@ function Brand({ compact = false }) {
 
 function Character({ side = 'left' }) {
   return <div className={`character-crop ${side}`} aria-hidden="true"><img src="/assets/upnatom-brand-transparent.png" alt="" /></div>
-}
-
-function HeroCharacter() {
-  return <img className="hero-character" src="/assets/hero-character.png" alt="" aria-hidden="true" />
 }
 
 function Toast({ message, onClose }) {
@@ -82,7 +78,7 @@ function Home({ navigate, promotions }) {
     <main>
       <section className="hero">
         <div className="hero-overlay" />
-        <HeroCharacter />
+        <Character side="left" />
         <div className="hero-copy">
           <span className="eyebrow"><Flame size={16} />Ouvert a Los Santos</span>
           <Brand />
@@ -558,30 +554,40 @@ function RevenuePanel({ staff, orders, cashEntries }) {
   )
 }
 
-function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createPromotion, updatePromotion, deletePromotion, saveRestaurants, saveSettings }) {
+function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
   const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', available: true, featured: false }
+  const emptyRestaurant = { name: '', hours: '', phone: '', x: 50, y: 50, active: true }
   const emptyPromotion = { title: '', offer: '', description: '', active: true }
   const [draftStaff, setDraftStaff] = useState(emptyStaff)
   const [draftMenu, setDraftMenu] = useState(emptyMenuItem)
+  const [draftRestaurant, setDraftRestaurant] = useState(emptyRestaurant)
   const [draftPromotion, setDraftPromotion] = useState(emptyPromotion)
   const [editingMenu, setEditingMenu] = useState(null)
   const [editingStaff, setEditingStaff] = useState(null)
   const [editingCustomer, setEditingCustomer] = useState(null)
+  const [editingRestaurant, setEditingRestaurant] = useState(null)
   const [editingPromotion, setEditingPromotion] = useState(null)
   const toggleMenu = item => updateMenuItem(item.id, { available: !item.available })
+  const toggleRestaurant = item => updateRestaurant(item.id, { active: !item.active })
+  const togglePromotion = item => updatePromotion(item.id, { active: !item.active })
   const addMenu = async event => {
     event.preventDefault()
     await createMenuItem({ ...draftMenu, id: uid('item'), price: Number(draftMenu.price) })
     setDraftMenu(emptyMenuItem)
   }
-  const addStaff = async event => { event.preventDefault(); await createStaff(draftStaff); setDraftStaff(emptyStaff) }
+  const addRestaurant = async event => {
+    event.preventDefault()
+    await createRestaurant({ ...draftRestaurant, id: uid('restaurant'), x: Number(draftRestaurant.x), y: Number(draftRestaurant.y), active: true })
+    setDraftRestaurant(emptyRestaurant)
+  }
   const addPromotion = async event => {
     event.preventDefault()
-    await createPromotion({ ...draftPromotion, id: uid('promo') })
+    await createPromotion({ ...draftPromotion, id: uid('promo'), active: true })
     setDraftPromotion(emptyPromotion)
   }
+  const addStaff = async event => { event.preventDefault(); await createStaff(draftStaff); setDraftStaff(emptyStaff) }
   return (
     <EmployeePage title="Administration" subtitle="Gestion du service et des contenus.">
       {isDemoMode && <div className="shared-warning"><ShieldCheck /><div><strong>Donnees locales</strong><span>Connectez Supabase pour partager automatiquement les comptes et commandes entre tous les utilisateurs.</span></div></div>}
@@ -590,12 +596,13 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
       {tab === 'staff' && <><form className="admin-form" onSubmit={addStaff}><h2>Creer un compte employe</h2><div className="form-row"><input required placeholder="Prenom" value={draftStaff.firstName} onChange={e => setDraftStaff({ ...draftStaff, firstName: e.target.value })} /><input required placeholder="Nom" value={draftStaff.lastName} onChange={e => setDraftStaff({ ...draftStaff, lastName: e.target.value })} /></div><div className="form-row"><input required placeholder="Identifiant" value={draftStaff.username} onChange={e => setDraftStaff({ ...draftStaff, username: e.target.value })} /><input required type="email" placeholder="E-mail" value={draftStaff.email} onChange={e => setDraftStaff({ ...draftStaff, email: e.target.value })} /></div><div className="form-row"><input required placeholder="Mot de passe temporaire" value={draftStaff.password} onChange={e => setDraftStaff({ ...draftStaff, password: e.target.value })} /><select value={draftStaff.role} onChange={e => setDraftStaff({ ...draftStaff, role: e.target.value })}>{rankOptions.map(item => <option key={item}>{item}</option>)}</select></div><div className="form-row"><input placeholder="Poste" value={draftStaff.position} onChange={e => setDraftStaff({ ...draftStaff, position: e.target.value })} /><select value={draftStaff.restaurant} onChange={e => setDraftStaff({ ...draftStaff, restaurant: e.target.value })}><option value="">Restaurant</option>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div><div className="form-row"><input placeholder="Telephone" value={draftStaff.phone} onChange={e => setDraftStaff({ ...draftStaff, phone: e.target.value })} /><input placeholder="IBAN" value={draftStaff.iban} onChange={e => setDraftStaff({ ...draftStaff, iban: e.target.value })} /></div><button className="primary"><Plus />Creer le compte</button></form><div className="people-admin-grid">{staff.map(item => <article className="person-admin-card" key={item.id}><header><div className="avatar">{fullName(item).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(item)}</h3><span>{item.role}</span></div></header><dl><div><dt>Poste</dt><dd>{item.position || '-'}</dd></div><div><dt>Restaurant</dt><dd>{item.restaurant || '-'}</dd></div><div><dt>Telephone</dt><dd>{item.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{item.email}</dd></div><div className="full"><dt>IBAN</dt><dd>{item.iban || 'Non renseigne'}</dd></div></dl><footer><button onClick={() => setEditingStaff(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteStaff(item)}><Trash2 /></button></footer></article>)}</div></>}
       {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div className="full"><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
-      {tab === 'restaurants' && <div className="admin-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours} · {item.phone}</span></div><label className="switch"><input type="checkbox" checked={item.active} onChange={() => saveRestaurants(restaurants.map(row => row.id === item.id ? { ...row, active: !row.active } : row))} /><span /></label></article>)}</div>}
-      {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Ajouter une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><label className="check-line"><input type="checkbox" checked={draftPromotion.active} onChange={e => setDraftPromotion({ ...draftPromotion, active: e.target.checked })} />Promotion active</label><button className="primary"><Plus />Ajouter la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Inactive'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => updatePromotion(item.id, { active: !item.active })} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
+      {tab === 'restaurants' && <><form className="admin-form" onSubmit={addRestaurant}><h2>Ajouter un restaurant sur la carte</h2><div className="form-row"><input required placeholder="Nom du restaurant" value={draftRestaurant.name} onChange={e => setDraftRestaurant({ ...draftRestaurant, name: e.target.value })} /><input placeholder="Telephone" value={draftRestaurant.phone} onChange={e => setDraftRestaurant({ ...draftRestaurant, phone: e.target.value })} /></div><div className="form-row"><input placeholder="Horaires" value={draftRestaurant.hours} onChange={e => setDraftRestaurant({ ...draftRestaurant, hours: e.target.value })} /><input type="number" min="0" max="100" step="0.1" placeholder="X carte" value={draftRestaurant.x} onChange={e => setDraftRestaurant({ ...draftRestaurant, x: e.target.value })} /><input type="number" min="0" max="100" step="0.1" placeholder="Y carte" value={draftRestaurant.y} onChange={e => setDraftRestaurant({ ...draftRestaurant, y: e.target.value })} /></div><button className="primary"><Plus />Ajouter le restaurant</button></form><div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteRestaurant(item.id)}><Trash2 /></button></div></article>)}</div></>}
+      {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Creer une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input required placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><button className="primary"><Plus />Publier la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Masquee'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => togglePromotion(item)} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'service' && <section className={`open-control ${settings.acceptingOrders ? 'is-open' : 'is-closed'}`}><div className="open-indicator"><span /><strong>{settings.acceptingOrders ? 'Restaurant ouvert' : 'Restaurant ferme'}</strong></div><p>Ce bouton autorise ou bloque immediatement les nouvelles commandes.</p><button className={settings.acceptingOrders ? 'close-button' : 'open-button'} onClick={() => saveSettings({ acceptingOrders: !settings.acceptingOrders })}>{settings.acceptingOrders ? 'Fermer le restaurant' : 'Ouvrir le restaurant'}</button></section>}
       {tab === 'taxes' && <TaxDocumentPanel orders={orders} />}
       {editingStaff && <EmployeeEditModal employee={editingStaff} restaurants={restaurants} onClose={() => setEditingStaff(null)} onSave={async values => { await updateStaffMember(editingStaff.id, values); setEditingStaff(null) }} />}
       {editingMenu && <MenuEditModal item={editingMenu} onClose={() => setEditingMenu(null)} onSave={async values => { await updateMenuItem(editingMenu.id, values); setEditingMenu(null) }} />}
+      {editingRestaurant && <RestaurantEditModal restaurant={editingRestaurant} onClose={() => setEditingRestaurant(null)} onSave={async values => { await updateRestaurant(editingRestaurant.id, values); setEditingRestaurant(null) }} />}
       {editingPromotion && <PromotionEditModal promotion={editingPromotion} onClose={() => setEditingPromotion(null)} onSave={async values => { await updatePromotion(editingPromotion.id, values); setEditingPromotion(null) }} />}
       {editingCustomer && <CustomerEditModal customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSave={async values => { await updateCustomerMember(editingCustomer.id, values); setEditingCustomer(null) }} />}
     </EmployeePage>
@@ -607,9 +614,15 @@ function MenuEditModal({ item, onClose, onSave }) {
   return <Modal title="Modifier le produit" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, price: Number(form.price) }) }}><label>Categorie<select value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image" value={form.imageUrl} onChange={event => setForm({ ...form, imageUrl: event.target.value })} /></label><div className="form-row"><label>Prix<input required min="0" step="0.1" type="number" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.available} onChange={event => setForm({ ...form, available: event.target.checked })} />Disponible</label></div><label className="check-line"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} />Produit signature</label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
+function RestaurantEditModal({ restaurant, onClose, onSave }) {
+  const [form, setForm] = useState({ name: restaurant.name || '', hours: restaurant.hours || '', phone: restaurant.phone || '', x: restaurant.x ?? 50, y: restaurant.y ?? 50, active: restaurant.active !== false })
+  const marker = { x: Number(form.x) || 0, y: Number(form.y) || 0 }
+  return <Modal title="Modifier le restaurant" onClose={onClose} wide><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, x: Number(form.x), y: Number(form.y) }) }}><div className="form-row"><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Telephone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label></div><label>Horaires<input value={form.hours} onChange={event => setForm({ ...form, hours: event.target.value })} /></label><div className="form-row"><label>X<input type="number" min="0" max="100" step="0.1" value={form.x} onChange={event => setForm({ ...form, x: event.target.value })} /></label><label>Y<input type="number" min="0" max="100" step="0.1" value={form.y} onChange={event => setForm({ ...form, y: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Visible sur la carte</label></div><SanAndreasMap compact marker={marker} onMarker={point => setForm({ ...form, x: point.x, y: point.y })} /><button className="primary"><Save />Enregistrer</button></form></Modal>
+}
+
 function PromotionEditModal({ promotion, onClose, onSave }) {
-  const [form, setForm] = useState({ title: promotion.title || '', offer: promotion.offer || '', description: promotion.description || '', active: promotion.active })
-  return <Modal title="Modifier la promotion" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><label>Titre<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label><label>Offre<input placeholder="Ex. -20 %, 1 achete = 1 offert" value={form.offer} onChange={event => setForm({ ...form, offer: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Promotion active</label><button className="primary"><Save />Enregistrer</button></form></Modal>
+  const [form, setForm] = useState({ title: promotion.title || '', offer: promotion.offer || '', description: promotion.description || '', active: promotion.active !== false })
+  return <Modal title="Modifier la promotion" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><label>Titre<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label><label>Offre<input required value={form.offer} onChange={event => setForm({ ...form, offer: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Promotion active</label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
 function EmployeeEditModal({ employee, restaurants, onClose, onSave }) {
@@ -622,33 +635,12 @@ function CustomerEditModal({ customer, onClose, onSave }) {
   return <Modal title="Modifier le client" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><div className="form-row"><label>Prenom<input value={form.firstName} onChange={event => setForm({ ...form, firstName: event.target.value })} /></label><label>Nom<input value={form.lastName} onChange={event => setForm({ ...form, lastName: event.target.value })} /></label></div><label>E-mail<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label>Telephone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label><label>Adresse<textarea value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
-function SiteIntro({ onFinish }) {
-  return (
-    <section className="site-intro" aria-label="Intro Up-n-Atom">
-      <div className="intro-burst" />
-      <div className="intro-orbit orbit-one" />
-      <div className="intro-orbit orbit-two" />
-      <div className="intro-scanlines" />
-      <div className="intro-stage">
-        <img className="intro-brand" src="/assets/upnatom-brand-transparent.png" alt="Up-n-Atom Hamburgers" />
-        <img className="intro-character" src="/assets/hero-character.png" alt="" aria-hidden="true" />
-        <div className="intro-copy">
-          <span>Atomic launch</span>
-          <strong>Service en ligne</strong>
-        </div>
-      </div>
-      <button className="intro-skip" onClick={onFinish}>Passer</button>
-    </section>
-  )
-}
-
 function PublicFooter({ navigate }) {
   return <footer className="public-footer"><Brand compact /><div><strong>Up-n-Atom Hamburgers</strong><p>Los Santos · Blaine County · San Andreas</p></div><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('restaurants')}>Restaurants</button><button onClick={() => navigate('employee-login')}>Espace equipe</button></nav></footer>
 }
 
 export default function App() {
   const [page, setPage] = useState('home')
-  const [showIntro, setShowIntro] = useState(() => sessionStorage.getItem('atom:intro-seen') !== 'true')
   const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem('atom:user')) } catch { return null } })
   const [cart, setCart] = useState([])
   const [menu, setMenu] = useState(menuSeed)
@@ -665,10 +657,6 @@ export default function App() {
   const [applications, setApplications] = useState([])
   const [settings, setSettings] = useState({ acceptingOrders: true })
   const [toast, setToast] = useState('')
-  const finishIntro = () => {
-    sessionStorage.setItem('atom:intro-seen', 'true')
-    setShowIntro(false)
-  }
 
   const refresh = async () => {
     try {
@@ -678,11 +666,6 @@ export default function App() {
     } catch (error) { console.error(error); setToast('Certaines donnees n’ont pas pu etre chargees.') }
   }
   useEffect(() => { refresh() }, [])
-  useEffect(() => {
-    if (!showIntro) return
-    const timer = setTimeout(finishIntro, 3600)
-    return () => clearTimeout(timer)
-  }, [showIntro])
   useEffect(() => {
     const localRefresh = () => refresh()
     window.addEventListener('storage', localRefresh)
@@ -722,13 +705,15 @@ export default function App() {
   const updateApplication = async (id, patch) => { await updateRecord('applications', id, patch); setApplications(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Candidature mise a jour.') }
   const submitHours = async form => { await insertRecord('time_entries', form); setTimeEntries(current => [form, ...current]); setToast('Heures enregistrees.') }
   const submitCash = async form => { await insertRecord('cash_entries', form); setCashEntries(current => [form, ...current]); setToast('Encaissement enregistre.') }
-  const saveLocalList = (collection, setter) => async value => { await replaceCollection(collection, value); setter(value); setToast('Modifications enregistrees.') }
   const saveSettings = async value => { await updateSettings(value); setSettings(value); setToast('Etat du service mis a jour.') }
   const createMenuItem = async form => { await insertRecord('menu', form); setMenu(current => [form, ...current]); setToast('Produit ajoute a la carte.') }
   const updateMenuItem = async (id, patch) => { await updateRecord('menu', id, patch); setMenu(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Produit mis a jour.') }
   const deleteMenuItem = async id => { await deleteRecord('menu', id); setMenu(current => current.filter(item => item.id !== id)); setToast('Produit supprime.') }
-  const createPromotion = async form => { await insertRecord('promotions', form); setPromotions(current => [form, ...current]); setToast('Promotion ajoutee.') }
-  const updatePromotion = async (id, patch) => { await updateRecord('promotions', id, patch); setPromotions(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Promotion mise a jour.') }
+  const createRestaurant = async form => { const saved = await insertRecord('restaurants', form); setRestaurants(current => [saved, ...current]); setToast('Restaurant ajoute a la carte.') }
+  const updateRestaurant = async (id, patch) => { const saved = await updateRecord('restaurants', id, patch); setRestaurants(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Restaurant mis a jour.') }
+  const deleteRestaurant = async id => { await deleteRecord('restaurants', id); setRestaurants(current => current.filter(item => item.id !== id)); setToast('Restaurant supprime.') }
+  const createPromotion = async form => { const saved = await insertRecord('promotions', form); setPromotions(current => [saved, ...current]); setToast('Promotion publiee.') }
+  const updatePromotion = async (id, patch) => { const saved = await updateRecord('promotions', id, patch); setPromotions(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Promotion mise a jour.') }
   const deletePromotion = async id => { await deleteRecord('promotions', id); setPromotions(current => current.filter(item => item.id !== id)); setToast('Promotion supprimee.') }
   const createStaff = async form => { const employee = await createEmployee(form); setStaff(current => [...current, employee]); setToast('Compte employe cree.') }
   const updateStaffMember = async (id, patch) => {
@@ -738,10 +723,9 @@ export default function App() {
   }
   const deleteStaff = async employee => { await removeEmployee(employee); setStaff(current => current.filter(item => item.id !== employee.id)); setToast('Compte employe supprime.') }
   const updateCustomerMember = async (id, patch) => { await updateCustomer(id, patch); setCustomers(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Fiche client mise a jour.') }
-  const intro = showIntro ? <SiteIntro onFinish={finishIntro} /> : null
 
   const employeePage = page.startsWith('employee-') && !['employee-login'].includes(page)
-  if (employeePage && user?.roleType !== 'employee') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
+  if (employeePage && user?.roleType !== 'employee') return <AuthPage portal="employee" onLogin={login} navigate={navigate} />
   if (employeePage && user?.roleType === 'employee') {
     let content = <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     if (page === 'employee-orders') content = <EmployeeOrders orders={orders} staff={staff} onUpdate={updateOrder} />
@@ -752,12 +736,12 @@ export default function App() {
     if (page === 'employee-clock') content = <ClockPage user={user} entries={timeEntries} onSubmit={submitHours} />
     if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} onSubmit={submitCash} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} saveRestaurants={saveLocalList('restaurants', setRestaurants)} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    return <>{intro}<EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
+    return <><EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
-  if (page === 'customer-login') return <>{intro}<AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} /></>
-  if (page === 'employee-login') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
+  if (page === 'customer-login') return <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
+  if (page === 'employee-login') return <AuthPage portal="employee" onLogin={login} navigate={navigate} />
 
   let content = <Home navigate={navigate} promotions={promotions} />
   if (page === 'menu') content = <MenuPage menu={menu} cart={cart} setCart={setCart} user={user?.roleType === 'customer' ? user : null} navigate={navigate} settings={settings} placeOrder={placeOrder} />
@@ -765,5 +749,5 @@ export default function App() {
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />
   if (page === 'recruitment') content = <Recruitment restaurants={restaurants} onSubmitApplication={submitApplication} />
   if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
-  return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+  return <><PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
 }
