@@ -16,10 +16,14 @@ import {
 
 const MAP_URL = 'https://www.igta5.com/images/gtav-map-atlas-huge.jpg'
 const categories = ['Menus', 'Burgers', 'Accompagnements', 'Boissons', 'Desserts']
+const badgeOptions = ['', 'Nouveau', 'Populaire', 'Edition limitee']
 
 const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(value)
 const fullName = user => `${user?.firstName || user?.first_name || ''} ${user?.lastName || user?.last_name || ''}`.trim()
 const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+const stockValue = product => Number.isFinite(Number(product?.stock)) ? Number(product.stock) : null
+const isProductAvailable = product => product?.available !== false && stockValue(product) !== 0
+const productBadge = product => !isProductAvailable(product) ? 'Indisponible' : product?.badge || (product?.featured ? 'Populaire' : '')
 const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f']/g, '').replace(/[’']/g, '').toLowerCase().trim()
 const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
 const isManagerRole = role => managerRoles.includes(normalizeRole(role))
@@ -77,21 +81,27 @@ function PublicHeader({ page, navigate, cartCount, user, logout }) {
   )
 }
 
-function Home({ navigate, promotions }) {
+function Home({ navigate, promotions, menu }) {
+  const activePromo = promotions.find(item => item.active)
+  const featuredProduct = menu.find(item => item.featured && isProductAvailable(item)) || menu.find(isProductAvailable) || menu[0]
+  const heroTitle = activePromo?.title || featuredProduct?.name || 'Double Atom'
+  const heroText = activePromo?.description || featuredProduct?.description || 'Double steak, double cheddar, cornichons et sauce maison.'
+  const heroValue = activePromo?.offer || (featuredProduct ? money(featuredProduct.price) : money(12.9))
+  const heroLabel = activePromo ? 'Offre active' : 'Menu vedette'
   return (
     <main>
       <section className="hero">
         <div className="hero-overlay" />
         <HeroCharacter />
         <div className="hero-copy">
-          <span className="eyebrow"><Flame size={16} />Ouvert a Los Santos</span>
+          <span className="eyebrow"><Flame size={16} />Ouvert a Roxwood</span>
           <Brand />
           <h1>Des burgers qui passent a l’action.</h1>
           <p>Steaks grilles, cheddar fondant, frites dorees et shakes bien frais. Commandez en ligne et choisissez votre point de livraison sur la carte.</p>
-          <div className="button-row"><button className="primary" onClick={() => navigate('menu')}>Commander</button><button className="secondary" onClick={() => navigate('restaurants')}>Trouver un restaurant</button></div>
+          <div className="button-row"><button className="primary" onClick={() => navigate('menu')}>Commander</button><button className="secondary" onClick={() => navigate('restaurants')}>Voir Roxwood</button></div>
         </div>
         <div className="hero-special">
-          <span>Menu vedette</span><h2>Double Atom</h2><p>Double steak, double cheddar, cornichons et sauce maison.</p><strong>{money(12.9)}</strong>
+          <span>{heroLabel}</span><h2>{heroTitle}</h2><p>{heroText}</p><strong>{heroValue}</strong>
         </div>
       </section>
       <section className="band features">
@@ -121,7 +131,10 @@ function MenuPage({ menu, cart, setCart, user, navigate, settings, placeOrder })
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const serviceAvailable = settings.acceptingOrders
   const add = product => setCart(current => {
+    if (!isProductAvailable(product)) return current
     const found = current.find(item => item.id === product.id)
+    const stock = stockValue(product)
+    if (found && stock !== null && found.quantity >= stock) return current
     return found ? current.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { ...product, quantity: 1 }]
   })
   const quantity = (id, value) => setCart(current => value <= 0 ? current.filter(item => item.id !== id) : current.map(item => item.id === id ? { ...item, quantity: value } : item))
@@ -133,9 +146,9 @@ function MenuPage({ menu, cart, setCart, user, navigate, settings, placeOrder })
           <div className="category-tabs">{categories.map(item => <button className={category === item ? 'active' : ''} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
           <div className="product-grid">
             {menu.filter(item => item.category === category).map(product => (
-              <article className={`product-card ${!product.available ? 'unavailable' : ''}`} key={product.id}>
+              <article className={`product-card ${!isProductAvailable(product) ? 'unavailable' : ''}`} key={product.id}>
                 <div className={product.imageUrl || product.image_url ? 'product-visual has-image' : 'product-visual'}>{product.imageUrl || product.image_url ? <img src={product.imageUrl || product.image_url} alt={product.name} /> : <Utensils size={42} />}<span>{product.featured ? 'Signature' : product.category}</span></div>
-                <div className="product-info"><h3>{product.name}</h3><p>{product.description}</p><footer><strong>{money(product.price)}</strong><button disabled={!product.available} onClick={() => add(product)}>{product.available ? 'Ajouter' : 'Indisponible'}</button></footer></div>
+                <div className="product-info"><div className="product-badges">{productBadge(product) && <span className={`product-badge ${!isProductAvailable(product) ? 'off' : ''}`}>{productBadge(product)}</span>}{stockValue(product) !== null && <span className="stock-badge">Stock {stockValue(product)}</span>}</div><h3>{product.name}</h3><p>{product.description}</p><footer><strong>{money(product.price)}</strong><button disabled={!isProductAvailable(product)} onClick={() => add(product)}>{isProductAvailable(product) ? 'Ajouter' : 'Indisponible'}</button></footer></div>
               </article>
             ))}
           </div>
@@ -248,7 +261,7 @@ function RestaurantsPage({ restaurants }) {
   const [selected, setSelected] = useState(restaurants[0]?.id)
   return (
     <main className="content-section page-top">
-      <div className="section-heading"><span>Restaurants</span><h1>Up-n-Atom dans tout San Andreas</h1><p>Selectionnez un restaurant pour le retrouver sur la carte.</p></div>
+      <div className="section-heading"><span>Restaurant</span><h1>Up-n-Atom Roxwood</h1><p>Notre point de service actif, visible directement sur la carte.</p></div>
       <div className="restaurant-layout">
         <SanAndreasMap restaurantMarkers restaurants={restaurants} />
         <div className="restaurant-list">{restaurants.filter(item => item.active).map(item => <button className={`restaurant-card ${selected === item.id ? 'active' : ''}`} onClick={() => setSelected(item.id)} key={item.id}><Store /><div><h3>{item.name}</h3><p>{item.hours}</p><span>{item.phone}</span></div></button>)}</div>
@@ -561,7 +574,7 @@ function RevenuePanel({ staff, orders, cashEntries }) {
 function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
-  const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', available: true, featured: false }
+  const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', badge: '', stock: 50, available: true, featured: false }
   const emptyRestaurant = { name: '', hours: '', phone: '', x: 50, y: 50, active: true }
   const emptyPromotion = { title: '', offer: '', description: '', active: true }
   const [draftStaff, setDraftStaff] = useState(emptyStaff)
@@ -578,7 +591,7 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
   const togglePromotion = item => updatePromotion(item.id, { active: !item.active })
   const addMenu = async event => {
     event.preventDefault()
-    await createMenuItem({ ...draftMenu, id: uid('item'), price: Number(draftMenu.price) })
+    await createMenuItem({ ...draftMenu, id: uid('item'), price: Number(draftMenu.price), stock: Number(draftMenu.stock) })
     setDraftMenu(emptyMenuItem)
   }
   const addRestaurant = async event => {
@@ -596,11 +609,11 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
     <EmployeePage title="Administration" subtitle="Gestion du service et des contenus.">
       {isDemoMode && <div className="shared-warning"><ShieldCheck /><div><strong>Donnees locales</strong><span>Connectez Supabase pour partager automatiquement les comptes et commandes entre tous les utilisateurs.</span></div></div>}
       <div className="admin-tabs">{[['menu', 'Produits'], ['staff', 'Employes'], ['customers', 'Clients'], ['revenue', 'Chiffre'], ['restaurants', 'Restaurants'], ['promotions', 'Promotions'], ['service', 'Ouverture'], ['taxes', 'Impots']].map(([key, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}>{label}</button>)}</div>
-      {tab === 'menu' && <><form className="admin-form" onSubmit={addMenu}><h2>Ajouter un produit ou menu</h2><div className="form-row"><select value={draftMenu.category} onChange={e => setDraftMenu({ ...draftMenu, category: e.target.value })}>{categories.map(item => <option key={item}>{item}</option>)}</select><input required placeholder="Nom du produit" value={draftMenu.name} onChange={e => setDraftMenu({ ...draftMenu, name: e.target.value })} /></div><label>Description<textarea required value={draftMenu.description} onChange={e => setDraftMenu({ ...draftMenu, description: e.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image, ex. /assets/burger.png" value={draftMenu.imageUrl} onChange={e => setDraftMenu({ ...draftMenu, imageUrl: e.target.value })} /></label><div className="form-row"><input required min="0" step="0.1" type="number" placeholder="Prix" value={draftMenu.price} onChange={e => setDraftMenu({ ...draftMenu, price: e.target.value })} /><label className="check-line"><input type="checkbox" checked={draftMenu.featured} onChange={e => setDraftMenu({ ...draftMenu, featured: e.target.checked })} />Produit signature</label></div><button className="primary"><Plus />Ajouter a la carte</button></form><div className="admin-list editable-list">{menu.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.category} · {money(item.price)} · {item.available ? 'Disponible' : 'Indisponible'}{(item.imageUrl || item.image_url) ? ' · Image' : ''}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.available} onChange={() => toggleMenu(item)} /><span /></label><button onClick={() => setEditingMenu(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteMenuItem(item.id)}><Trash2 /></button></div></article>)}</div></>}
+      {tab === 'menu' && <><form className="admin-form" onSubmit={addMenu}><h2>Ajouter un produit ou menu</h2><div className="form-row"><select value={draftMenu.category} onChange={e => setDraftMenu({ ...draftMenu, category: e.target.value })}>{categories.map(item => <option key={item}>{item}</option>)}</select><input required placeholder="Nom du produit" value={draftMenu.name} onChange={e => setDraftMenu({ ...draftMenu, name: e.target.value })} /></div><label>Description<textarea required value={draftMenu.description} onChange={e => setDraftMenu({ ...draftMenu, description: e.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image, ex. /assets/burger.png" value={draftMenu.imageUrl} onChange={e => setDraftMenu({ ...draftMenu, imageUrl: e.target.value })} /></label><div className="form-row"><input required min="0" step="0.1" type="number" placeholder="Prix" value={draftMenu.price} onChange={e => setDraftMenu({ ...draftMenu, price: e.target.value })} /><input min="0" step="1" type="number" placeholder="Stock" value={draftMenu.stock} onChange={e => setDraftMenu({ ...draftMenu, stock: e.target.value })} /><select value={draftMenu.badge} onChange={e => setDraftMenu({ ...draftMenu, badge: e.target.value })}>{badgeOptions.map(item => <option key={item} value={item}>{item || 'Aucun badge'}</option>)}</select></div><div className="form-row"><label className="check-line"><input type="checkbox" checked={draftMenu.featured} onChange={e => setDraftMenu({ ...draftMenu, featured: e.target.checked })} />Produit signature</label><label className="check-line"><input type="checkbox" checked={draftMenu.available} onChange={e => setDraftMenu({ ...draftMenu, available: e.target.checked })} />Disponible</label></div><button className="primary"><Plus />Ajouter a la carte</button></form><div className="admin-list editable-list">{menu.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.category} · {money(item.price)} · {isProductAvailable(item) ? 'Disponible' : 'Indisponible'} · Stock {stockValue(item) ?? 'illimite'}{productBadge(item) ? ` · ${productBadge(item)}` : ''}{(item.imageUrl || item.image_url) ? ' · Image' : ''}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.available} onChange={() => toggleMenu(item)} /><span /></label><button onClick={() => setEditingMenu(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteMenuItem(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'staff' && <><form className="admin-form" onSubmit={addStaff}><h2>Creer un compte employe</h2><div className="form-row"><input required placeholder="Prenom" value={draftStaff.firstName} onChange={e => setDraftStaff({ ...draftStaff, firstName: e.target.value })} /><input required placeholder="Nom" value={draftStaff.lastName} onChange={e => setDraftStaff({ ...draftStaff, lastName: e.target.value })} /></div><div className="form-row"><input required placeholder="Identifiant" value={draftStaff.username} onChange={e => setDraftStaff({ ...draftStaff, username: e.target.value })} /><input required type="email" placeholder="E-mail" value={draftStaff.email} onChange={e => setDraftStaff({ ...draftStaff, email: e.target.value })} /></div><div className="form-row"><input required placeholder="Mot de passe temporaire" value={draftStaff.password} onChange={e => setDraftStaff({ ...draftStaff, password: e.target.value })} /><select value={draftStaff.role} onChange={e => setDraftStaff({ ...draftStaff, role: e.target.value })}>{rankOptions.map(item => <option key={item}>{item}</option>)}</select></div><div className="form-row"><input placeholder="Poste" value={draftStaff.position} onChange={e => setDraftStaff({ ...draftStaff, position: e.target.value })} /><select value={draftStaff.restaurant} onChange={e => setDraftStaff({ ...draftStaff, restaurant: e.target.value })}><option value="">Restaurant</option>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div><div className="form-row"><input placeholder="Telephone" value={draftStaff.phone} onChange={e => setDraftStaff({ ...draftStaff, phone: e.target.value })} /><input placeholder="IBAN" value={draftStaff.iban} onChange={e => setDraftStaff({ ...draftStaff, iban: e.target.value })} /></div><button className="primary"><Plus />Creer le compte</button></form><div className="people-admin-grid">{staff.map(item => <article className="person-admin-card" key={item.id}><header><div className="avatar">{fullName(item).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(item)}</h3><span>{item.role}</span></div></header><dl><div><dt>Poste</dt><dd>{item.position || '-'}</dd></div><div><dt>Restaurant</dt><dd>{item.restaurant || '-'}</dd></div><div><dt>Telephone</dt><dd>{item.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{item.email}</dd></div><div className="full"><dt>IBAN</dt><dd>{item.iban || 'Non renseigne'}</dd></div></dl><footer><button onClick={() => setEditingStaff(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteStaff(item)}><Trash2 /></button></footer></article>)}</div></>}
       {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div className="full"><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
-      {tab === 'restaurants' && <><form className="admin-form" onSubmit={addRestaurant}><h2>Ajouter un restaurant sur la carte</h2><div className="form-row"><input required placeholder="Nom du restaurant" value={draftRestaurant.name} onChange={e => setDraftRestaurant({ ...draftRestaurant, name: e.target.value })} /><input placeholder="Telephone" value={draftRestaurant.phone} onChange={e => setDraftRestaurant({ ...draftRestaurant, phone: e.target.value })} /></div><div className="form-row"><input placeholder="Horaires" value={draftRestaurant.hours} onChange={e => setDraftRestaurant({ ...draftRestaurant, hours: e.target.value })} /><input type="number" min="0" max="100" step="0.1" placeholder="X carte" value={draftRestaurant.x} onChange={e => setDraftRestaurant({ ...draftRestaurant, x: e.target.value })} /><input type="number" min="0" max="100" step="0.1" placeholder="Y carte" value={draftRestaurant.y} onChange={e => setDraftRestaurant({ ...draftRestaurant, y: e.target.value })} /></div><button className="primary"><Plus />Ajouter le restaurant</button></form><div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteRestaurant(item.id)}><Trash2 /></button></div></article>)}</div></>}
+      {tab === 'restaurants' && <div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button></div></article>)}</div>}
       {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Creer une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input required placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><button className="primary"><Plus />Publier la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Masquee'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => togglePromotion(item)} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'service' && <section className={`open-control ${settings.acceptingOrders ? 'is-open' : 'is-closed'}`}><div className="open-indicator"><span /><strong>{settings.acceptingOrders ? 'Restaurant ouvert' : 'Restaurant ferme'}</strong></div><p>Ce bouton autorise ou bloque immediatement les nouvelles commandes.</p><button className={settings.acceptingOrders ? 'close-button' : 'open-button'} onClick={() => saveSettings({ acceptingOrders: !settings.acceptingOrders })}>{settings.acceptingOrders ? 'Fermer le restaurant' : 'Ouvrir le restaurant'}</button></section>}
       {tab === 'taxes' && <TaxDocumentPanel orders={orders} />}
@@ -614,8 +627,8 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
 }
 
 function MenuEditModal({ item, onClose, onSave }) {
-  const [form, setForm] = useState({ category: item.category, name: item.name, description: item.description || '', imageUrl: item.imageUrl || item.image_url || '', price: item.price, available: item.available, featured: item.featured })
-  return <Modal title="Modifier le produit" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, price: Number(form.price) }) }}><label>Categorie<select value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image" value={form.imageUrl} onChange={event => setForm({ ...form, imageUrl: event.target.value })} /></label><div className="form-row"><label>Prix<input required min="0" step="0.1" type="number" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.available} onChange={event => setForm({ ...form, available: event.target.checked })} />Disponible</label></div><label className="check-line"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} />Produit signature</label><button className="primary"><Save />Enregistrer</button></form></Modal>
+  const [form, setForm] = useState({ category: item.category, name: item.name, description: item.description || '', imageUrl: item.imageUrl || item.image_url || '', price: item.price, badge: item.badge || '', stock: stockValue(item) ?? 50, available: item.available, featured: item.featured })
+  return <Modal title="Modifier le produit" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, price: Number(form.price), stock: Number(form.stock) }) }}><label>Categorie<select value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image" value={form.imageUrl} onChange={event => setForm({ ...form, imageUrl: event.target.value })} /></label><div className="form-row"><label>Prix<input required min="0" step="0.1" type="number" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} /></label><label>Stock<input min="0" step="1" type="number" value={form.stock} onChange={event => setForm({ ...form, stock: event.target.value })} /></label></div><label>Badge<select value={form.badge} onChange={event => setForm({ ...form, badge: event.target.value })}>{badgeOptions.map(badge => <option key={badge} value={badge}>{badge || 'Aucun badge'}</option>)}</select></label><div className="form-row"><label className="check-line"><input type="checkbox" checked={form.available} onChange={event => setForm({ ...form, available: event.target.checked })} />Disponible</label><label className="check-line"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} />Produit signature</label></div><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
 function RestaurantEditModal({ restaurant, onClose, onSave }) {
@@ -660,7 +673,7 @@ function SiteIntro({ onFinish }) {
 }
 
 function PublicFooter({ navigate }) {
-  return <footer className="public-footer"><Brand compact /><div><strong>Up-n-Atom Hamburgers</strong><p>Los Santos · Blaine County · San Andreas</p></div><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('restaurants')}>Restaurants</button><button onClick={() => navigate('employee-login')}>Espace equipe</button></nav></footer>
+  return <footer className="public-footer"><Brand compact /><div><strong>Up-n-Atom Hamburgers</strong><p>Roxwood · San Andreas</p></div><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('restaurants')}>Roxwood</button><button onClick={() => navigate('employee-login')}>Espace equipe</button></nav></footer>
 }
 
 export default function App() {
@@ -727,7 +740,19 @@ export default function App() {
   const placeOrder = async form => {
     await insertRecord('orders', form)
     await updateCustomer(form.customerId, { phone: form.phone, address: form.address })
+    const stockUpdates = supabase ? [] : (form.items || []).map(line => {
+      const product = menu.find(item => item.id === line.id)
+      const stock = stockValue(product)
+      if (!product || stock === null) return null
+      const nextStock = Math.max(0, stock - Number(line.quantity || 0))
+      return updateRecord('menu', product.id, { stock: nextStock, available: product.available !== false && nextStock > 0 }).then(() => ({ id: product.id, stock: nextStock, available: product.available !== false && nextStock > 0 }))
+    }).filter(Boolean)
+    const savedStocks = await Promise.all(stockUpdates)
     setOrders(current => [form, ...current]); setCustomers(current => current.map(item => item.id === form.customerId ? { ...item, phone: form.phone, address: form.address } : item))
+    if (savedStocks.length) setMenu(current => current.map(item => {
+      const stockPatch = savedStocks.find(row => row.id === item.id)
+      return stockPatch ? { ...item, stock: stockPatch.stock, available: stockPatch.available } : item
+    }))
     setCart([]); navigate('account'); setToast(`Commande ${form.id} envoyee.`)
   }
   const updateOrder = async (id, patch) => { await updateRecord('orders', id, patch); setOrders(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Commande mise a jour.') }
@@ -778,7 +803,7 @@ export default function App() {
   if (page === 'customer-login') return <>{intro}<AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} /></>
   if (page === 'employee-login') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
 
-  let content = <Home navigate={navigate} promotions={promotions} />
+  let content = <Home navigate={navigate} promotions={promotions} menu={menu} />
   if (page === 'menu') content = <MenuPage menu={menu} cart={cart} setCart={setCart} user={user?.roleType === 'customer' ? user : null} navigate={navigate} settings={settings} placeOrder={placeOrder} />
   if (page === 'promos') content = <PromosPage promotions={promotions} />
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />

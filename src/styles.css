@@ -284,6 +284,11 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .product-visual svg, .product-visual span { position: relative; z-index: 1; }
 .product-visual span { align-self: flex-start; color: white; font-size: 10px; font-weight: 900; text-transform: uppercase; text-shadow: 0 1px 5px rgba(0,0,0,.45); }
 .product-info { display: flex; flex-direction: column; padding: 20px; }
+.product-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+.product-badge, .stock-badge { width: fit-content; display: inline-flex; align-items: center; min-height: 22px; padding: 4px 7px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; }
+.product-badge { color: white; background: var(--red); }
+.product-badge.off { background: #3d332f; }
+.stock-badge { color: #3b2016; background: #f4e3c7; }
 .product-info h3 { margin: 0 0 7px; font-size: 28px; }
 .product-info p { flex: 1; color: var(--muted); line-height: 1.45; font-size: 14px; }
 .product-info footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
