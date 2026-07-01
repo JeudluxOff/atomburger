@@ -33,6 +33,10 @@ function Character({ side = 'left' }) {
   return <div className={`character-crop ${side}`} aria-hidden="true"><img src="/assets/upnatom-brand-transparent.png" alt="" /></div>
 }
 
+function HeroCharacter() {
+  return <img className="hero-character" src="/assets/hero-character.png" alt="" aria-hidden="true" />
+}
+
 function Toast({ message, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3500)
@@ -78,7 +82,7 @@ function Home({ navigate, promotions }) {
     <main>
       <section className="hero">
         <div className="hero-overlay" />
-        <Character side="left" />
+        <HeroCharacter />
         <div className="hero-copy">
           <span className="eyebrow"><Flame size={16} />Ouvert a Los Santos</span>
           <Brand />

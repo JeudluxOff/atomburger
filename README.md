@@ -1,37 +1,33 @@
--- Run this once in Supabase SQL Editor to add synchronized job applications.
-create table if not exists applications (
-  id text primary key,
-  "fullName" text not null,
-  phone text not null,
-  role text not null,
-  restaurant text default '',
-  message text not null,
-  status text not null default 'Nouvelle',
-  "createdAt" timestamptz not null default now(),
-  created_at timestamptz not null default now()
-);
+# Up-n-Atom Hamburgers
 
-alter table applications enable row level security;
+Site React/Vite avec espace client, commandes, carte de livraison, calendrier d'equipe et administration.
 
-drop policy if exists "public creates applications" on applications;
-drop policy if exists "managers read applications" on applications;
-drop policy if exists "managers update applications" on applications;
-drop policy if exists "managers delete applications" on applications;
+## Demarrage local
 
-create policy "public creates applications" on applications for insert with check (true);
-create policy "managers read applications" on applications for select using (is_manager());
-create policy "managers update applications" on applications for update using (is_manager()) with check (is_manager());
-create policy "managers delete applications" on applications for delete using (is_manager());
+```bash
+npm install
+npm run dev
+```
 
-do $$
-begin
-  if not exists (
-    select 1
-    from pg_publication_tables
-    where pubname = 'supabase_realtime'
-      and schemaname = 'public'
-      and tablename = 'applications'
-  ) then
-    alter publication supabase_realtime add table public.applications;
-  end if;
-end $$;
+Sans variables d'environnement, le site utilise un mode de demonstration persistant uniquement dans le navigateur actuel. Pour que tous les utilisateurs voient les memes comptes, commandes, annonces et evenements, la configuration Supabase ci-dessous est obligatoire.
+
+- Client : `client@atom.sa / atom`
+- Direction : `directeur / atom`
+- Manager : `manager / atom`
+- Equipier : `equipier / atom`
+
+## Mise en production
+
+1. Creer un projet Supabase.
+2. Executer `supabase/schema.sql` dans l'editeur SQL.
+3. Creer le premier compte de direction dans Supabase Auth avec les metadonnees `role_type: employee`, `role: Directeur Restaurant` et `permissions: ["calendar", "orders", "admin"]`.
+4. Ajouter les variables de `.env.example` au projet Vercel.
+5. Deployer le dossier sur Vercel.
+
+Une fois les variables ajoutees, les donnees sont centralisees et synchronisees en direct entre tous les navigateurs. Un compte employe cree par la direction peut alors se connecter depuis un autre ordinateur, et une nouvelle commande apparait automatiquement chez les employes.
+
+La cle `SUPABASE_SERVICE_ROLE_KEY` reste uniquement dans les variables serveur Vercel. Elle ne doit jamais commencer par `VITE_`.
+
+## Carte
+
+La carte interactive utilise l'atlas complet de GTA V comme fond, avec des coordonnees relatives pour conserver les marqueurs sur toutes les tailles d'ecran.

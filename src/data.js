@@ -20,7 +20,7 @@ export const menuSeed = [
 ]
 
 export const restaurantsSeed = [
-  { id: 'roxwood', name: 'Roxwood Nord', hours: '12:00 - 23:00', phone: '555-ATOM-00', x: 23, y: 19, active: true },
+  { id: 'roxwood', name: 'Roxwood Nord', hours: '12:00 - 23:00', phone: '555-ATOM-00', x: 52, y: 8, active: true },
   { id: 'vinewood', name: 'Vinewood Boulevard', hours: '10:00 - 02:00', phone: '555-ATOM-01', x: 47.5, y: 72.5, active: true },
   { id: 'vespucci', name: 'Vespucci Beach', hours: '11:00 - 03:00', phone: '555-ATOM-02', x: 37, y: 82, active: true },
   { id: 'legion', name: 'Legion Square', hours: '09:00 - 00:00', phone: '555-ATOM-03', x: 52, y: 82, active: true },

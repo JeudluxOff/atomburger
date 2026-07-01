@@ -3,12 +3,16 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl =
   process.env.VITE_SUPABASE_URL ||
   process.env.STORAGE_SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL
+  process.env.Storage_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_STORAGE_SUPABASE_URL ||
+  process.env.NEXT_PUBLIC_Storage_SUPABASE_URL
 
 const serviceRoleKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.STORAGE_SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.STORAGE_SUPABASE_SECRET_KEY
+  process.env.Storage_SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.STORAGE_SUPABASE_SECRET_KEY ||
+  process.env.Storage_SUPABASE_SECRET_KEY
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
