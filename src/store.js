@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { announcementsSeed, customerSeed, docsSeed, eventSeed, menuSeed, orderSeed, promotionsSeed, restaurantsSeed, staffSeed, timeEntrySeed } from './data'
+import { announcementsSeed, customerSeed, docsSeed, eventSeed, menuSeed, orderSeed, promotionsSeed, restaurantsSeed, staffSeed, tickerMessagesSeed, timeEntrySeed } from './data'
 
 const url = import.meta.env.VITE_SUPABASE_URL
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -18,6 +18,7 @@ const seeds = {
   announcements: announcementsSeed,
   documents: docsSeed,
   promotions: promotionsSeed,
+  ticker_messages: tickerMessagesSeed,
   applications: [],
   settings: { acceptingOrders: true },
 }

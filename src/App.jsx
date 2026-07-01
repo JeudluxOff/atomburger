@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import {
   announcementsSeed, docsSeed, menuSeed, orderStatuses, promotionsSeed, rankOptions,
-  restaurantsSeed, staffSeed,
+  restaurantsSeed, staffSeed, tickerMessagesSeed,
 } from './data'
 import {
   createEmployee, deleteRecord, insertRecord, isDemoMode, loadCollection, loadCustomers, loadSettings, removeEmployee, supabase,
@@ -56,24 +56,44 @@ function Modal({ title, children, onClose, wide = false }) {
   )
 }
 
-function PublicHeader({ page, navigate, cartCount, user, logout }) {
+function TickerBar({ messages }) {
+  const activeMessages = messages.filter(item => item.active !== false && item.message?.trim())
+  if (!activeMessages.length) return null
+  const text = activeMessages.map(item => item.message.trim()).join('     •     ')
+  const repeatCount = Math.max(6, Math.ceil(260 / Math.max(text.length, 1)))
+  const repeatedText = Array.from({ length: repeatCount }, () => text).join('     •     ')
+  const duration = Math.min(70, Math.max(18, repeatedText.length * 0.22))
+  return (
+    <div className="ticker-bar" aria-label="Messages importants" style={{ '--ticker-duration': `${duration}s` }}>
+      <div className="ticker-track">
+        <span>{repeatedText}</span>
+        <span aria-hidden="true">{repeatedText}</span>
+      </div>
+    </div>
+  )
+}
+
+function PublicHeader({ page, navigate, cartCount, user, logout, tickerMessages }) {
   const [open, setOpen] = useState(false)
   const links = [['home', 'Accueil'], ['menu', 'La carte'], ['promos', 'Promotions'], ['restaurants', 'Restaurants'], ['recruitment', 'Recrutement']]
   return (
-    <header className="public-header">
-      <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Menu">{open ? <X /> : <MenuIcon />}</button>
-      <button className="brand-button" onClick={() => navigate('home')}><Brand compact /></button>
-      <nav className={open ? 'public-nav open' : 'public-nav'}>
-        {links.map(([key, label]) => <button className={page === key ? 'active' : ''} key={key} onClick={() => { navigate(key); setOpen(false) }}>{label}</button>)}
-      </nav>
-      <div className="header-actions">
-        <button className="cart-button" onClick={() => navigate('menu')}><ShoppingBag size={18} /><span>{cartCount}</span></button>
-        {user?.roleType === 'customer' ? (
-          <div className="account-menu"><button onClick={() => navigate('account')}><CircleUserRound size={19} />{user.firstName || user.first_name}</button><button className="logout-mini" onClick={logout}><LogOut size={17} /></button></div>
-        ) : <button className="account-button" onClick={() => navigate('customer-login')}><UserRound size={18} />Connexion</button>}
-        <button className="staff-button" onClick={() => navigate('employee-login')}>Espace equipe</button>
-      </div>
-    </header>
+    <>
+      <header className="public-header">
+        <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Menu">{open ? <X /> : <MenuIcon />}</button>
+        <button className="brand-button" onClick={() => navigate('home')}><Brand compact /></button>
+        <nav className={open ? 'public-nav open' : 'public-nav'}>
+          {links.map(([key, label]) => <button className={page === key ? 'active' : ''} key={key} onClick={() => { navigate(key); setOpen(false) }}>{label}</button>)}
+        </nav>
+        <div className="header-actions">
+          <button className="cart-button" onClick={() => navigate('menu')}><ShoppingBag size={18} /><span>{cartCount}</span></button>
+          {user?.roleType === 'customer' ? (
+            <div className="account-menu"><button onClick={() => navigate('account')}><CircleUserRound size={19} />{user.firstName || user.first_name}</button><button className="logout-mini" onClick={logout}><LogOut size={17} /></button></div>
+          ) : <button className="account-button" onClick={() => navigate('customer-login')}><UserRound size={18} />Connexion</button>}
+          <button className="staff-button" onClick={() => navigate('employee-login')}>Espace equipe</button>
+        </div>
+      </header>
+      <TickerBar messages={tickerMessages} />
+    </>
   )
 }
 
@@ -558,24 +578,28 @@ function RevenuePanel({ staff, orders, cashEntries }) {
   )
 }
 
-function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, saveSettings }) {
+function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, tickerMessages, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, createTickerMessage, updateTickerMessage, deleteTickerMessage, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
   const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', available: true, featured: false }
   const emptyRestaurant = { name: '', hours: '', phone: '', x: 50, y: 50, active: true }
   const emptyPromotion = { title: '', offer: '', description: '', active: true }
+  const emptyTicker = { message: '', active: true }
   const [draftStaff, setDraftStaff] = useState(emptyStaff)
   const [draftMenu, setDraftMenu] = useState(emptyMenuItem)
   const [draftRestaurant, setDraftRestaurant] = useState(emptyRestaurant)
   const [draftPromotion, setDraftPromotion] = useState(emptyPromotion)
+  const [draftTicker, setDraftTicker] = useState(emptyTicker)
   const [editingMenu, setEditingMenu] = useState(null)
   const [editingStaff, setEditingStaff] = useState(null)
   const [editingCustomer, setEditingCustomer] = useState(null)
   const [editingRestaurant, setEditingRestaurant] = useState(null)
   const [editingPromotion, setEditingPromotion] = useState(null)
+  const [editingTicker, setEditingTicker] = useState(null)
   const toggleMenu = item => updateMenuItem(item.id, { available: !item.available })
   const toggleRestaurant = item => updateRestaurant(item.id, { active: !item.active })
   const togglePromotion = item => updatePromotion(item.id, { active: !item.active })
+  const toggleTicker = item => updateTickerMessage(item.id, { active: !item.active })
   const addMenu = async event => {
     event.preventDefault()
     await createMenuItem({ ...draftMenu, id: uid('item'), price: Number(draftMenu.price) })
@@ -591,23 +615,30 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
     await createPromotion({ ...draftPromotion, id: uid('promo'), active: true })
     setDraftPromotion(emptyPromotion)
   }
+  const addTicker = async event => {
+    event.preventDefault()
+    await createTickerMessage({ ...draftTicker, id: uid('ticker'), message: draftTicker.message.trim(), active: true, created_at: new Date().toISOString() })
+    setDraftTicker(emptyTicker)
+  }
   const addStaff = async event => { event.preventDefault(); await createStaff(draftStaff); setDraftStaff(emptyStaff) }
   return (
     <EmployeePage title="Administration" subtitle="Gestion du service et des contenus.">
       {isDemoMode && <div className="shared-warning"><ShieldCheck /><div><strong>Donnees locales</strong><span>Connectez Supabase pour partager automatiquement les comptes et commandes entre tous les utilisateurs.</span></div></div>}
-      <div className="admin-tabs">{[['menu', 'Produits'], ['staff', 'Employes'], ['customers', 'Clients'], ['revenue', 'Chiffre'], ['restaurants', 'Restaurants'], ['promotions', 'Promotions'], ['service', 'Ouverture'], ['taxes', 'Impots']].map(([key, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}>{label}</button>)}</div>
+      <div className="admin-tabs">{[['menu', 'Produits'], ['staff', 'Employes'], ['customers', 'Clients'], ['revenue', 'Chiffre'], ['restaurants', 'Restaurants'], ['promotions', 'Promotions'], ['ticker', 'Bandeau'], ['service', 'Ouverture'], ['taxes', 'Impots']].map(([key, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}>{label}</button>)}</div>
       {tab === 'menu' && <><form className="admin-form" onSubmit={addMenu}><h2>Ajouter un produit ou menu</h2><div className="form-row"><select value={draftMenu.category} onChange={e => setDraftMenu({ ...draftMenu, category: e.target.value })}>{categories.map(item => <option key={item}>{item}</option>)}</select><input required placeholder="Nom du produit" value={draftMenu.name} onChange={e => setDraftMenu({ ...draftMenu, name: e.target.value })} /></div><label>Description<textarea required value={draftMenu.description} onChange={e => setDraftMenu({ ...draftMenu, description: e.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image, ex. /assets/burger.png" value={draftMenu.imageUrl} onChange={e => setDraftMenu({ ...draftMenu, imageUrl: e.target.value })} /></label><div className="form-row"><input required min="0" step="0.1" type="number" placeholder="Prix" value={draftMenu.price} onChange={e => setDraftMenu({ ...draftMenu, price: e.target.value })} /><label className="check-line"><input type="checkbox" checked={draftMenu.featured} onChange={e => setDraftMenu({ ...draftMenu, featured: e.target.checked })} />Produit signature</label></div><button className="primary"><Plus />Ajouter a la carte</button></form><div className="admin-list editable-list">{menu.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.category} · {money(item.price)} · {item.available ? 'Disponible' : 'Indisponible'}{(item.imageUrl || item.image_url) ? ' · Image' : ''}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.available} onChange={() => toggleMenu(item)} /><span /></label><button onClick={() => setEditingMenu(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteMenuItem(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'staff' && <><form className="admin-form" onSubmit={addStaff}><h2>Creer un compte employe</h2><div className="form-row"><input required placeholder="Prenom" value={draftStaff.firstName} onChange={e => setDraftStaff({ ...draftStaff, firstName: e.target.value })} /><input required placeholder="Nom" value={draftStaff.lastName} onChange={e => setDraftStaff({ ...draftStaff, lastName: e.target.value })} /></div><div className="form-row"><input required placeholder="Identifiant" value={draftStaff.username} onChange={e => setDraftStaff({ ...draftStaff, username: e.target.value })} /><input required type="email" placeholder="E-mail" value={draftStaff.email} onChange={e => setDraftStaff({ ...draftStaff, email: e.target.value })} /></div><div className="form-row"><input required placeholder="Mot de passe temporaire" value={draftStaff.password} onChange={e => setDraftStaff({ ...draftStaff, password: e.target.value })} /><select value={draftStaff.role} onChange={e => setDraftStaff({ ...draftStaff, role: e.target.value })}>{rankOptions.map(item => <option key={item}>{item}</option>)}</select></div><div className="form-row"><input placeholder="Poste" value={draftStaff.position} onChange={e => setDraftStaff({ ...draftStaff, position: e.target.value })} /><select value={draftStaff.restaurant} onChange={e => setDraftStaff({ ...draftStaff, restaurant: e.target.value })}><option value="">Restaurant</option>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div><div className="form-row"><input placeholder="Telephone" value={draftStaff.phone} onChange={e => setDraftStaff({ ...draftStaff, phone: e.target.value })} /><input placeholder="IBAN" value={draftStaff.iban} onChange={e => setDraftStaff({ ...draftStaff, iban: e.target.value })} /></div><button className="primary"><Plus />Creer le compte</button></form><div className="people-admin-grid">{staff.map(item => <article className="person-admin-card" key={item.id}><header><div className="avatar">{fullName(item).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(item)}</h3><span>{item.role}</span></div></header><dl><div><dt>Poste</dt><dd>{item.position || '-'}</dd></div><div><dt>Restaurant</dt><dd>{item.restaurant || '-'}</dd></div><div><dt>Telephone</dt><dd>{item.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{item.email}</dd></div><div className="full"><dt>IBAN</dt><dd>{item.iban || 'Non renseigne'}</dd></div></dl><footer><button onClick={() => setEditingStaff(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteStaff(item)}><Trash2 /></button></footer></article>)}</div></>}
       {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div className="full"><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
       {tab === 'restaurants' && <><form className="admin-form" onSubmit={addRestaurant}><h2>Ajouter un restaurant sur la carte</h2><div className="form-row"><input required placeholder="Nom du restaurant" value={draftRestaurant.name} onChange={e => setDraftRestaurant({ ...draftRestaurant, name: e.target.value })} /><input placeholder="Telephone" value={draftRestaurant.phone} onChange={e => setDraftRestaurant({ ...draftRestaurant, phone: e.target.value })} /></div><div className="form-row"><input placeholder="Horaires" value={draftRestaurant.hours} onChange={e => setDraftRestaurant({ ...draftRestaurant, hours: e.target.value })} /><input type="number" min="0" max="100" step="0.1" placeholder="X carte" value={draftRestaurant.x} onChange={e => setDraftRestaurant({ ...draftRestaurant, x: e.target.value })} /><input type="number" min="0" max="100" step="0.1" placeholder="Y carte" value={draftRestaurant.y} onChange={e => setDraftRestaurant({ ...draftRestaurant, y: e.target.value })} /></div><button className="primary"><Plus />Ajouter le restaurant</button></form><div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteRestaurant(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Creer une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input required placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><button className="primary"><Plus />Publier la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Masquee'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => togglePromotion(item)} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
+      {tab === 'ticker' && <><form className="admin-form" onSubmit={addTicker}><h2>Message du bandeau defilant</h2><label>Message visible sous le menu public<textarea required placeholder="Ex. Livraison Roxwood ouverte jusqu'a 23h." value={draftTicker.message} onChange={e => setDraftTicker({ ...draftTicker, message: e.target.value })} /></label><button className="primary"><Plus />Ajouter au bandeau</button></form><div className="admin-list editable-list">{tickerMessages.map(item => <article key={item.id}><div><strong>{item.message}</strong><span>{item.active ? 'Visible sur le site' : 'Masque'}{item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString('fr-FR')}` : ''}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active !== false} onChange={() => toggleTicker(item)} /><span /></label><button onClick={() => setEditingTicker(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteTickerMessage(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'service' && <section className={`open-control ${settings.acceptingOrders ? 'is-open' : 'is-closed'}`}><div className="open-indicator"><span /><strong>{settings.acceptingOrders ? 'Restaurant ouvert' : 'Restaurant ferme'}</strong></div><p>Ce bouton autorise ou bloque immediatement les nouvelles commandes.</p><button className={settings.acceptingOrders ? 'close-button' : 'open-button'} onClick={() => saveSettings({ acceptingOrders: !settings.acceptingOrders })}>{settings.acceptingOrders ? 'Fermer le restaurant' : 'Ouvrir le restaurant'}</button></section>}
       {tab === 'taxes' && <TaxDocumentPanel orders={orders} />}
       {editingStaff && <EmployeeEditModal employee={editingStaff} restaurants={restaurants} onClose={() => setEditingStaff(null)} onSave={async values => { await updateStaffMember(editingStaff.id, values); setEditingStaff(null) }} />}
       {editingMenu && <MenuEditModal item={editingMenu} onClose={() => setEditingMenu(null)} onSave={async values => { await updateMenuItem(editingMenu.id, values); setEditingMenu(null) }} />}
       {editingRestaurant && <RestaurantEditModal restaurant={editingRestaurant} onClose={() => setEditingRestaurant(null)} onSave={async values => { await updateRestaurant(editingRestaurant.id, values); setEditingRestaurant(null) }} />}
       {editingPromotion && <PromotionEditModal promotion={editingPromotion} onClose={() => setEditingPromotion(null)} onSave={async values => { await updatePromotion(editingPromotion.id, values); setEditingPromotion(null) }} />}
+      {editingTicker && <TickerMessageEditModal ticker={editingTicker} onClose={() => setEditingTicker(null)} onSave={async values => { await updateTickerMessage(editingTicker.id, values); setEditingTicker(null) }} />}
       {editingCustomer && <CustomerEditModal customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSave={async values => { await updateCustomerMember(editingCustomer.id, values); setEditingCustomer(null) }} />}
     </EmployeePage>
   )
@@ -627,6 +658,11 @@ function RestaurantEditModal({ restaurant, onClose, onSave }) {
 function PromotionEditModal({ promotion, onClose, onSave }) {
   const [form, setForm] = useState({ title: promotion.title || '', offer: promotion.offer || '', description: promotion.description || '', active: promotion.active !== false })
   return <Modal title="Modifier la promotion" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><label>Titre<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label><label>Offre<input required value={form.offer} onChange={event => setForm({ ...form, offer: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Promotion active</label><button className="primary"><Save />Enregistrer</button></form></Modal>
+}
+
+function TickerMessageEditModal({ ticker, onClose, onSave }) {
+  const [form, setForm] = useState({ message: ticker.message || '', active: ticker.active !== false })
+  return <Modal title="Modifier le bandeau" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, message: form.message.trim() }) }}><label>Message<textarea required value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Visible sur le site</label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
 function EmployeeEditModal({ employee, restaurants, onClose, onSave }) {
@@ -679,6 +715,7 @@ export default function App() {
   const [announcements, setAnnouncements] = useState(announcementsSeed)
   const [documents, setDocuments] = useState(docsSeed)
   const [promotions, setPromotions] = useState(promotionsSeed)
+  const [tickerMessages, setTickerMessages] = useState(tickerMessagesSeed)
   const [applications, setApplications] = useState([])
   const [settings, setSettings] = useState({ acceptingOrders: true })
   const [toast, setToast] = useState('')
@@ -689,8 +726,12 @@ export default function App() {
 
   const refresh = async () => {
     try {
-      const [m, r, s, e, o, a, d, p, h, cash, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions', 'time_entries', 'cash_entries', 'applications'].map(loadCollection), loadCustomers()])
-      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTimeEntries(h); setCashEntries(cash); setApplications(apps); setCustomers(c)
+      const loadTickerMessages = () => loadCollection('ticker_messages').catch(error => {
+        console.warn('ticker_messages unavailable', error)
+        return tickerMessagesSeed
+      })
+      const [m, r, s, e, o, a, d, p, t, h, cash, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions'].map(loadCollection), loadTickerMessages(), ...['time_entries', 'cash_entries', 'applications'].map(loadCollection), loadCustomers()])
+      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTickerMessages(t); setTimeEntries(h); setCashEntries(cash); setApplications(apps); setCustomers(c)
       setSettings(await loadSettings())
     } catch (error) { console.error(error); setToast('Certaines donnees n’ont pas pu etre chargees.') }
   }
@@ -707,7 +748,7 @@ export default function App() {
     if (!supabase) return () => { window.removeEventListener('storage', localRefresh); window.removeEventListener('atom:data', localRefresh) }
 
     const channel = supabase.channel('upnatom-live')
-    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'applications', 'menu', 'restaurants', 'promotions', 'settings'].forEach(table => {
+    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'applications', 'menu', 'restaurants', 'promotions', 'ticker_messages', 'settings'].forEach(table => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, localRefresh)
     })
     channel.subscribe()
@@ -749,6 +790,9 @@ export default function App() {
   const createPromotion = async form => { const saved = await insertRecord('promotions', form); setPromotions(current => [saved, ...current]); setToast('Promotion publiee.') }
   const updatePromotion = async (id, patch) => { const saved = await updateRecord('promotions', id, patch); setPromotions(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Promotion mise a jour.') }
   const deletePromotion = async id => { await deleteRecord('promotions', id); setPromotions(current => current.filter(item => item.id !== id)); setToast('Promotion supprimee.') }
+  const createTickerMessage = async form => { const saved = await insertRecord('ticker_messages', form); setTickerMessages(current => [saved, ...current]); setToast('Message ajoute au bandeau.') }
+  const updateTickerMessage = async (id, patch) => { const saved = await updateRecord('ticker_messages', id, patch); setTickerMessages(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Message du bandeau mis a jour.') }
+  const deleteTickerMessage = async id => { await deleteRecord('ticker_messages', id); setTickerMessages(current => current.filter(item => item.id !== id)); setToast('Message du bandeau supprime.') }
   const createStaff = async form => { const employee = await createEmployee(form); setStaff(current => [...current, employee]); setToast('Compte employe cree.') }
   const updateStaffMember = async (id, patch) => {
     const currentStaff = staff.find(item => item.id === id) || {}
@@ -771,7 +815,7 @@ export default function App() {
     if (page === 'employee-clock') content = <ClockPage user={user} entries={timeEntries} onSubmit={submitHours} />
     if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} onSubmit={submitCash} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
+    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} tickerMessages={tickerMessages} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} createTickerMessage={createTickerMessage} updateTickerMessage={updateTickerMessage} deleteTickerMessage={deleteTickerMessage} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     return <>{intro}<EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
@@ -784,5 +828,5 @@ export default function App() {
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />
   if (page === 'recruitment') content = <Recruitment restaurants={restaurants} onSubmitApplication={submitApplication} />
   if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
-  return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+  return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} tickerMessages={tickerMessages} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
 }

@@ -73,6 +73,10 @@ export const promotionsSeed = [
   { id: 'p3', title: 'Shake Friday', offer: '1 achete = 1 offert', description: 'Tous les vendredis sur les Jumbo Shakes.', active: true },
 ]
 
+export const tickerMessagesSeed = [
+  { id: 'ticker-1', message: 'Service Roxwood ouvert : commandes en ligne disponibles.', active: true, created_at: new Date().toISOString() },
+]
+
 export const orderStatuses = ['Nouvelle', 'Acceptee', 'En preparation', 'En livraison', 'Terminee', 'Annulee']
 
 export const rankOptions = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Manager', 'Equipier Formateur', 'Equipier polyvalent', 'Mascotte / Animation', 'Stagiaire equipier']
