@@ -44,8 +44,6 @@ create table if not exists public.menu (
   description text,
   price numeric(10,2) not null default 0,
   "imageUrl" text default '',
-  badge text default '',
-  stock integer not null default 50,
   available boolean not null default true,
   featured boolean not null default false,
   created_at timestamptz not null default now()
@@ -102,8 +100,6 @@ create table if not exists public.settings (
 );
 
 alter table public.menu add column if not exists "imageUrl" text default '';
-alter table public.menu add column if not exists badge text default '';
-alter table public.menu add column if not exists stock integer not null default 50;
 alter table public.menu add column if not exists available boolean not null default true;
 alter table public.menu add column if not exists featured boolean not null default false;
 alter table public.menu add column if not exists created_at timestamptz not null default now();
