@@ -558,15 +558,18 @@ function RevenuePanel({ staff, orders, cashEntries }) {
   )
 }
 
-function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, saveRestaurants, savePromotions, saveSettings }) {
+function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createPromotion, updatePromotion, deletePromotion, saveRestaurants, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
   const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', available: true, featured: false }
+  const emptyPromotion = { title: '', offer: '', description: '', active: true }
   const [draftStaff, setDraftStaff] = useState(emptyStaff)
   const [draftMenu, setDraftMenu] = useState(emptyMenuItem)
+  const [draftPromotion, setDraftPromotion] = useState(emptyPromotion)
   const [editingMenu, setEditingMenu] = useState(null)
   const [editingStaff, setEditingStaff] = useState(null)
   const [editingCustomer, setEditingCustomer] = useState(null)
+  const [editingPromotion, setEditingPromotion] = useState(null)
   const toggleMenu = item => updateMenuItem(item.id, { available: !item.available })
   const addMenu = async event => {
     event.preventDefault()
@@ -574,6 +577,11 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
     setDraftMenu(emptyMenuItem)
   }
   const addStaff = async event => { event.preventDefault(); await createStaff(draftStaff); setDraftStaff(emptyStaff) }
+  const addPromotion = async event => {
+    event.preventDefault()
+    await createPromotion({ ...draftPromotion, id: uid('promo') })
+    setDraftPromotion(emptyPromotion)
+  }
   return (
     <EmployeePage title="Administration" subtitle="Gestion du service et des contenus.">
       {isDemoMode && <div className="shared-warning"><ShieldCheck /><div><strong>Donnees locales</strong><span>Connectez Supabase pour partager automatiquement les comptes et commandes entre tous les utilisateurs.</span></div></div>}
@@ -583,11 +591,12 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
       {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div className="full"><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
       {tab === 'restaurants' && <div className="admin-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours} · {item.phone}</span></div><label className="switch"><input type="checkbox" checked={item.active} onChange={() => saveRestaurants(restaurants.map(row => row.id === item.id ? { ...row, active: !row.active } : row))} /><span /></label></article>)}</div>}
-      {tab === 'promotions' && <div className="admin-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description}</span></div><label className="switch"><input type="checkbox" checked={item.active} onChange={() => savePromotions(promotions.map(row => row.id === item.id ? { ...row, active: !row.active } : row))} /><span /></label></article>)}</div>}
+      {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Ajouter une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><label className="check-line"><input type="checkbox" checked={draftPromotion.active} onChange={e => setDraftPromotion({ ...draftPromotion, active: e.target.checked })} />Promotion active</label><button className="primary"><Plus />Ajouter la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Inactive'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => updatePromotion(item.id, { active: !item.active })} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'service' && <section className={`open-control ${settings.acceptingOrders ? 'is-open' : 'is-closed'}`}><div className="open-indicator"><span /><strong>{settings.acceptingOrders ? 'Restaurant ouvert' : 'Restaurant ferme'}</strong></div><p>Ce bouton autorise ou bloque immediatement les nouvelles commandes.</p><button className={settings.acceptingOrders ? 'close-button' : 'open-button'} onClick={() => saveSettings({ acceptingOrders: !settings.acceptingOrders })}>{settings.acceptingOrders ? 'Fermer le restaurant' : 'Ouvrir le restaurant'}</button></section>}
       {tab === 'taxes' && <TaxDocumentPanel orders={orders} />}
       {editingStaff && <EmployeeEditModal employee={editingStaff} restaurants={restaurants} onClose={() => setEditingStaff(null)} onSave={async values => { await updateStaffMember(editingStaff.id, values); setEditingStaff(null) }} />}
       {editingMenu && <MenuEditModal item={editingMenu} onClose={() => setEditingMenu(null)} onSave={async values => { await updateMenuItem(editingMenu.id, values); setEditingMenu(null) }} />}
+      {editingPromotion && <PromotionEditModal promotion={editingPromotion} onClose={() => setEditingPromotion(null)} onSave={async values => { await updatePromotion(editingPromotion.id, values); setEditingPromotion(null) }} />}
       {editingCustomer && <CustomerEditModal customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSave={async values => { await updateCustomerMember(editingCustomer.id, values); setEditingCustomer(null) }} />}
     </EmployeePage>
   )
@@ -596,6 +605,11 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
 function MenuEditModal({ item, onClose, onSave }) {
   const [form, setForm] = useState({ category: item.category, name: item.name, description: item.description || '', imageUrl: item.imageUrl || item.image_url || '', price: item.price, available: item.available, featured: item.featured })
   return <Modal title="Modifier le produit" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, price: Number(form.price) }) }}><label>Categorie<select value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image" value={form.imageUrl} onChange={event => setForm({ ...form, imageUrl: event.target.value })} /></label><div className="form-row"><label>Prix<input required min="0" step="0.1" type="number" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.available} onChange={event => setForm({ ...form, available: event.target.checked })} />Disponible</label></div><label className="check-line"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} />Produit signature</label><button className="primary"><Save />Enregistrer</button></form></Modal>
+}
+
+function PromotionEditModal({ promotion, onClose, onSave }) {
+  const [form, setForm] = useState({ title: promotion.title || '', offer: promotion.offer || '', description: promotion.description || '', active: promotion.active })
+  return <Modal title="Modifier la promotion" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><label>Titre<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label><label>Offre<input placeholder="Ex. -20 %, 1 achete = 1 offert" value={form.offer} onChange={event => setForm({ ...form, offer: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Promotion active</label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
 function EmployeeEditModal({ employee, restaurants, onClose, onSave }) {
@@ -683,6 +697,9 @@ export default function App() {
   const createMenuItem = async form => { await insertRecord('menu', form); setMenu(current => [form, ...current]); setToast('Produit ajoute a la carte.') }
   const updateMenuItem = async (id, patch) => { await updateRecord('menu', id, patch); setMenu(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Produit mis a jour.') }
   const deleteMenuItem = async id => { await deleteRecord('menu', id); setMenu(current => current.filter(item => item.id !== id)); setToast('Produit supprime.') }
+  const createPromotion = async form => { await insertRecord('promotions', form); setPromotions(current => [form, ...current]); setToast('Promotion ajoutee.') }
+  const updatePromotion = async (id, patch) => { await updateRecord('promotions', id, patch); setPromotions(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Promotion mise a jour.') }
+  const deletePromotion = async id => { await deleteRecord('promotions', id); setPromotions(current => current.filter(item => item.id !== id)); setToast('Promotion supprimee.') }
   const createStaff = async form => { const employee = await createEmployee(form); setStaff(current => [...current, employee]); setToast('Compte employe cree.') }
   const updateStaffMember = async (id, patch) => {
     const currentStaff = staff.find(item => item.id === id) || {}
@@ -704,7 +721,7 @@ export default function App() {
     if (page === 'employee-clock') content = <ClockPage user={user} entries={timeEntries} onSubmit={submitHours} />
     if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} onSubmit={submitCash} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} saveRestaurants={saveLocalList('restaurants', setRestaurants)} savePromotions={saveLocalList('promotions', setPromotions)} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
+    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} saveRestaurants={saveLocalList('restaurants', setRestaurants)} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     return <><EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
