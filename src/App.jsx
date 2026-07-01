@@ -635,12 +635,33 @@ function CustomerEditModal({ customer, onClose, onSave }) {
   return <Modal title="Modifier le client" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><div className="form-row"><label>Prenom<input value={form.firstName} onChange={event => setForm({ ...form, firstName: event.target.value })} /></label><label>Nom<input value={form.lastName} onChange={event => setForm({ ...form, lastName: event.target.value })} /></label></div><label>E-mail<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label>Telephone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label><label>Adresse<textarea value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
+function SiteIntro({ onFinish }) {
+  return (
+    <section className="site-intro" aria-label="Intro Up-n-Atom">
+      <div className="intro-burst" />
+      <div className="intro-orbit orbit-one" />
+      <div className="intro-orbit orbit-two" />
+      <div className="intro-scanlines" />
+      <div className="intro-stage">
+        <img className="intro-brand" src="/assets/upnatom-brand-transparent.png" alt="Up-n-Atom Hamburgers" />
+        <img className="intro-character" src="/assets/hero-character.png" alt="" aria-hidden="true" />
+        <div className="intro-copy">
+          <span>Atomic launch</span>
+          <strong>Service en ligne</strong>
+        </div>
+      </div>
+      <button className="intro-skip" onClick={onFinish}>Passer</button>
+    </section>
+  )
+}
+
 function PublicFooter({ navigate }) {
   return <footer className="public-footer"><Brand compact /><div><strong>Up-n-Atom Hamburgers</strong><p>Los Santos · Blaine County · San Andreas</p></div><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('restaurants')}>Restaurants</button><button onClick={() => navigate('employee-login')}>Espace equipe</button></nav></footer>
 }
 
 export default function App() {
   const [page, setPage] = useState('home')
+  const [showIntro, setShowIntro] = useState(() => sessionStorage.getItem('atom:intro-seen') !== 'true')
   const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem('atom:user')) } catch { return null } })
   const [cart, setCart] = useState([])
   const [menu, setMenu] = useState(menuSeed)
@@ -657,6 +678,10 @@ export default function App() {
   const [applications, setApplications] = useState([])
   const [settings, setSettings] = useState({ acceptingOrders: true })
   const [toast, setToast] = useState('')
+  const finishIntro = () => {
+    sessionStorage.setItem('atom:intro-seen', 'true')
+    setShowIntro(false)
+  }
 
   const refresh = async () => {
     try {
@@ -666,6 +691,11 @@ export default function App() {
     } catch (error) { console.error(error); setToast('Certaines donnees n’ont pas pu etre chargees.') }
   }
   useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    if (!showIntro) return
+    const timer = setTimeout(finishIntro, 3600)
+    return () => clearTimeout(timer)
+  }, [showIntro])
   useEffect(() => {
     const localRefresh = () => refresh()
     window.addEventListener('storage', localRefresh)
@@ -723,9 +753,10 @@ export default function App() {
   }
   const deleteStaff = async employee => { await removeEmployee(employee); setStaff(current => current.filter(item => item.id !== employee.id)); setToast('Compte employe supprime.') }
   const updateCustomerMember = async (id, patch) => { await updateCustomer(id, patch); setCustomers(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Fiche client mise a jour.') }
+  const intro = showIntro ? <SiteIntro onFinish={finishIntro} /> : null
 
   const employeePage = page.startsWith('employee-') && !['employee-login'].includes(page)
-  if (employeePage && user?.roleType !== 'employee') return <AuthPage portal="employee" onLogin={login} navigate={navigate} />
+  if (employeePage && user?.roleType !== 'employee') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
   if (employeePage && user?.roleType === 'employee') {
     let content = <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     if (page === 'employee-orders') content = <EmployeeOrders orders={orders} staff={staff} onUpdate={updateOrder} />
@@ -737,11 +768,11 @@ export default function App() {
     if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} onSubmit={submitCash} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    return <><EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+    return <>{intro}<EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
-  if (page === 'customer-login') return <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
-  if (page === 'employee-login') return <AuthPage portal="employee" onLogin={login} navigate={navigate} />
+  if (page === 'customer-login') return <>{intro}<AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} /></>
+  if (page === 'employee-login') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
 
   let content = <Home navigate={navigate} promotions={promotions} />
   if (page === 'menu') content = <MenuPage menu={menu} cart={cart} setCart={setCart} user={user?.roleType === 'customer' ? user : null} navigate={navigate} settings={settings} placeOrder={placeOrder} />
@@ -749,5 +780,5 @@ export default function App() {
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />
   if (page === 'recruitment') content = <Recruitment restaurants={restaurants} onSubmitApplication={submitApplication} />
   if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
-  return <><PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+  return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
 }
