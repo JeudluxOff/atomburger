@@ -817,7 +817,15 @@ export default function App() {
   const login = async (identifier, password, portal) => {
     const account = await signIn(identifier, password, portal); setUser(account); sessionStorage.setItem('atom:user', JSON.stringify(account)); navigate(portal === 'employee' ? 'employee-dashboard' : 'account')
   }
-  const register = async form => { const account = await signUpCustomer(form); setUser(account); setCustomers(current => [account, ...current]); sessionStorage.setItem('atom:user', JSON.stringify(account)); navigate('account'); setToast('Votre compte client est pret.') }
+  const register = async form => {
+    const account = await signUpCustomer(form)
+    setUser(account)
+    if (supabase) setCustomers(await loadCustomers())
+    else setCustomers(current => [account, ...current])
+    sessionStorage.setItem('atom:user', JSON.stringify(account))
+    navigate('account')
+    setToast('Votre compte client est pret.')
+  }
   const logout = async () => { await signOut(); setUser(null); sessionStorage.removeItem('atom:user'); navigate('home') }
   const placeOrder = async form => {
     await insertRecord('orders', form)

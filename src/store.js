@@ -26,6 +26,12 @@ const seeds = {
 const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, '').toLowerCase().trim()
 const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
 const isManagerRole = role => managerRoles.includes(normalizeRole(role))
+const normalizeCustomer = item => ({
+  ...item,
+  firstName: item.firstName || item.first_name || '',
+  lastName: item.lastName || item.last_name || '',
+  roleType: 'customer',
+})
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -197,7 +203,7 @@ export async function signUpCustomer(form) {
   if (!response.ok) throw new Error(body.error || 'Creation impossible.')
   const { data, error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password })
   if (error) throw error
-  return { ...body, id: data.user.id, roleType: 'customer' }
+  return normalizeCustomer({ ...body, id: data.user.id })
 }
 
 export async function signOut() {
@@ -211,7 +217,7 @@ export async function loadCustomers() {
   }
   const { data, error } = await supabase.from('profiles').select('*').eq('role_type', 'customer').order('created_at', { ascending: false })
   if (error) throw error
-  return data.map(item => ({ ...item, roleType: 'customer' }))
+  return data.map(normalizeCustomer)
 }
 
 export async function updateCustomer(id, patch) {

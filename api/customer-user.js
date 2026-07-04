@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   }
   if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: 'Configuration Supabase incomplete.' })
 
-  const { email, password, firstName, lastName, phone = '' } = req.body || {}
+  const { email, password, firstName, lastName, phone = '', address = '' } = req.body || {}
   if (!email || !password || !firstName || !lastName) return res.status(400).json({ error: 'Informations incompletes.' })
 
   const admin = createClient(supabaseUrl, serviceRoleKey)
@@ -33,6 +33,24 @@ export default async function handler(req, res) {
   })
   if (error) return res.status(400).json({ error: error.message })
 
-  const customer = { id: data.user.id, email, firstName, lastName, phone, address: '', roleType: 'customer' }
+  const profile = {
+    id: data.user.id,
+    email,
+    firstName,
+    lastName,
+    phone,
+    address,
+    role_type: 'customer',
+    role: null,
+    permissions: [],
+  }
+  const { data: savedProfile, error: profileError } = await admin
+    .from('profiles')
+    .upsert(profile, { onConflict: 'id' })
+    .select()
+    .single()
+  if (profileError) return res.status(400).json({ error: profileError.message })
+
+  const customer = { ...savedProfile, roleType: 'customer' }
   return res.status(201).json(customer)
 }
