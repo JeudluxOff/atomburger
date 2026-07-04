@@ -179,7 +179,7 @@ function MenuPage({ menu, cart, setCart, user, navigate, settings, placeOrder })
             {menu.filter(item => item.category === category).map(product => (
               <article className={`product-card ${!isProductAvailable(product) ? 'unavailable' : ''}`} key={product.id}>
                 <div className={product.imageUrl || product.image_url ? 'product-visual has-image' : 'product-visual'}>{product.imageUrl || product.image_url ? <img src={product.imageUrl || product.image_url} alt={product.name} /> : <Utensils size={42} />}<span>{product.featured ? 'Signature' : product.category}</span></div>
-                <div className="product-info"><div className="product-badges">{productBadge(product) && <span className={`product-badge ${!isProductAvailable(product) ? 'off' : ''}`}>{productBadge(product)}</span>}{stockValue(product) !== null && <span className="stock-badge">Stock {stockValue(product)}</span>}</div><h3>{product.name}</h3><p>{product.description}</p><footer><strong>{money(product.price)}</strong><button disabled={!isProductAvailable(product)} onClick={() => add(product)}>{isProductAvailable(product) ? 'Ajouter' : 'Indisponible'}</button></footer></div>
+                <div className="product-info"><div className="product-badges">{productBadge(product) && <span className={`product-badge ${!isProductAvailable(product) ? 'off' : ''}`}>{productBadge(product)}</span>}</div><h3>{product.name}</h3><p>{product.description}</p><footer><strong>{money(product.price)}</strong><button disabled={!isProductAvailable(product)} onClick={() => add(product)}>{isProductAvailable(product) ? 'Ajouter' : 'Indisponible'}</button></footer></div>
               </article>
             ))}
           </div>
@@ -802,7 +802,52 @@ function SiteIntro({ onFinish }) {
 }
 
 function PublicFooter({ navigate }) {
-  return <footer className="public-footer"><Brand compact /><div><strong>Up-n-Atom Hamburgers</strong><p>Los Santos · Blaine County · Roxwood</p></div><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('restaurants')}>Restaurants</button><button onClick={() => navigate('employee-login')}>Espace equipe</button></nav></footer>
+  const year = new Date().getFullYear()
+  return (
+    <footer className="public-footer">
+      <div className="footer-main">
+        <section className="footer-brand-block">
+          <Brand compact />
+          <p>Le comptoir officiel Up-n-Atom de Roxwood : commandes, promotions, recrutement et service client en un seul endroit.</p>
+          <div className="footer-socials">
+            <button onClick={() => navigate('restaurants')} aria-label="Voir le restaurant"><MapPin size={18} /></button>
+            <button onClick={() => navigate('customer-login')} aria-label="Connexion client"><Users size={18} /></button>
+          </div>
+        </section>
+        <section className="footer-column">
+          <h3>Departements</h3>
+          <button onClick={() => navigate('menu')}>La carte</button>
+          <button onClick={() => navigate('promotions')}>Promotions</button>
+          <button onClick={() => navigate('restaurants')}>Restaurant Roxwood</button>
+          <button onClick={() => navigate('recruitment')}>Recrutement</button>
+          <button onClick={() => navigate('customer-login')}>Compte client</button>
+        </section>
+        <section className="footer-column">
+          <h3>Services populaires</h3>
+          <button onClick={() => navigate('menu')}>Commander en ligne</button>
+          <button onClick={() => navigate('menu')}>Voir les menus</button>
+          <button onClick={() => navigate('customer-account')}>Carte fidelite</button>
+          <button onClick={() => navigate('customer-account')}>Suivre une commande</button>
+          <button onClick={() => navigate('recruitment')}>Postuler a Roxwood</button>
+        </section>
+        <section className="footer-contact">
+          <h3>Contact officiel</h3>
+          <div className="footer-contact-line"><Store size={18} /><span>Up-n-Atom Roxwood, San Andreas</span></div>
+          <div className="footer-contact-line"><ShoppingBag size={18} /><span>Commandes, fidelite et espace equipe</span></div>
+          <button className="footer-emergency" onClick={() => navigate('menu')}>Urgence faim : commandez maintenant</button>
+        </section>
+      </div>
+      <div className="footer-bottom">
+        <span>© {year} UP-N-ATOM HAMBURGERS — TOUS DROITS RESERVES</span>
+        <div className="footer-bottom-links">
+          <button>Accessibilite</button>
+          <button>Confidentialite</button>
+          <button>Conditions d'utilisation</button>
+          <button>Plan du site</button>
+        </div>
+      </div>
+    </footer>
+  )
 }
 
 export default function App() {
