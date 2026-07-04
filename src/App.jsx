@@ -724,7 +724,7 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries
                 <div className={image ? 'admin-product-image has-image' : 'admin-product-image'}>{image ? <img src={image} alt={item.name} /> : <Utensils size={30} />}</div>
                 <h3>{item.name}</h3>
                 <p>{item.description || 'Aucune description'}</p>
-                <div className="admin-product-meta"><strong>{money(item.price)}</strong><span>Stock {stockValue(item) ?? 'illimite'}</span></div>
+                <div className="admin-product-meta"><strong>{money(item.price)}</strong></div>
                 <div className="admin-product-badges"><span>{isProductAvailable(item) ? 'Disponible' : 'Indisponible'}</span>{badge && <span>{badge}</span>}{item.featured && <span>Signature</span>}</div>
                 <footer><label className="switch"><input type="checkbox" checked={item.available} onChange={() => toggleMenu(item)} /><span /></label><button onClick={() => setEditingMenu(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteMenuItem(item.id)}><Trash2 /></button></footer>
               </article>

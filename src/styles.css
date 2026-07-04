@@ -320,6 +320,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .product-badge { color: white; background: var(--red); }
 .product-badge.off { background: #3d332f; }
 .stock-badge { color: #3b2016; background: #f4e3c7; }
+.stock-badge { display: none !important; }
 .product-info h3 { margin: 0 0 7px; font-size: 28px; }
 .product-info p { flex: 1; color: var(--muted); line-height: 1.45; font-size: 14px; }
 .product-info footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
