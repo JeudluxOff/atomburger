@@ -177,12 +177,13 @@ export async function signIn(identifier, password, portal) {
   }
   const { data, error } = await supabase.auth.signInWithPassword({ email: identifier, password })
   if (error) throw error
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
-  if (!profile || (portal === 'employee' && profile.role_type !== 'employee')) throw new Error('Ce compte ne dispose pas de cet acces.')
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle()
   if (portal === 'employee') {
     const { data: staffProfile } = await supabase.from('staff').select('*').or(`auth_id.eq.${data.user.id},email.eq.${data.user.email}`).maybeSingle()
-    return { ...profile, ...staffProfile, id: staffProfile?.id || profile.id, auth_id: data.user.id, email: data.user.email, roleType: 'employee' }
+    if (!staffProfile && profile?.role_type !== 'employee') throw new Error('Ce compte ne dispose pas de cet acces.')
+    return { ...(profile || {}), ...(staffProfile || {}), id: staffProfile?.id || profile?.id, auth_id: data.user.id, email: data.user.email, roleType: 'employee' }
   }
+  if (!profile) throw new Error('Ce compte ne dispose pas de cet acces.')
   return { ...profile, email: data.user.email, roleType: profile.role_type }
 }
 

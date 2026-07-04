@@ -27,6 +27,19 @@ select
   coalesce(users.created_at, now())
 from auth.users
 where coalesce(users.raw_user_meta_data->>'role_type', users.raw_user_meta_data->>'roleType', 'customer') = 'customer'
+  and lower(coalesce(users.email, '')) <> 'admin@atom.sa'
+  and not exists (
+    select 1
+    from public.staff staff
+    where staff.auth_id = users.id
+      or lower(staff.email) = lower(coalesce(users.email, ''))
+  )
+  and not exists (
+    select 1
+    from public.profiles existing_profile
+    where existing_profile.id = users.id
+      and existing_profile.role_type = 'employee'
+  )
 on conflict (id) do update set
   email = excluded.email,
   "firstName" = case when public.profiles."firstName" = '' then excluded."firstName" else public.profiles."firstName" end,
@@ -35,7 +48,8 @@ on conflict (id) do update set
   address = case when coalesce(public.profiles.address, '') = '' then excluded.address else public.profiles.address end,
   role_type = 'customer',
   role = null,
-  permissions = '[]'::jsonb;
+  permissions = '[]'::jsonb
+where public.profiles.role_type is distinct from 'employee';
 
 do $$
 begin
