@@ -499,13 +499,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .order-progress.cancelled { opacity: .4; }
 .order-progress small { font-size: 10px; }
 
-.public-footer {
-  color: white;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(210, 11, 36, .16), transparent 34%),
-    linear-gradient(180deg, #211613 0%, #17100e 58%, #0f0b0a 100%);
-  border-top: 4px solid var(--red);
-}
+.public-footer { color: white; background: var(--ink); }
 .footer-main {
   width: min(1440px, 100%);
   margin: 0 auto;
@@ -518,7 +512,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .footer-brand-block p {
   max-width: 340px;
   margin: 28px 0 0;
-  color: #e6d8cf;
+  color: #e4eefb;
   font-size: 15px;
   line-height: 1.6;
 }
@@ -528,17 +522,17 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
   height: 40px;
   display: grid;
   place-items: center;
-  color: #fff3c4;
+  color: #eaf3ff;
   border-radius: 50%;
-  background: rgba(255,255,255,.09);
+  background: rgba(255,255,255,.12);
 }
-.footer-socials button:hover { background: rgba(210, 11, 36, .32); }
+.footer-socials button:hover { background: rgba(255,255,255,.22); }
 .footer-column h3, .footer-contact h3 {
   width: fit-content;
   min-width: 120px;
   margin-bottom: 23px;
   padding-bottom: 13px;
-  border-bottom: 1px solid rgba(255,217,26,.28);
+  border-bottom: 1px solid rgba(255,255,255,.22);
   color: white;
   font-family: Inter, system-ui, sans-serif;
   font-size: 18px;
@@ -548,7 +542,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
   display: block;
   margin: 0 0 14px;
   padding: 0;
-  color: #f4e8df;
+  color: #f2f7ff;
   background: transparent;
   text-align: left;
   font-size: 14px;
@@ -560,7 +554,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
   gap: 12px;
   align-items: flex-start;
   margin-bottom: 17px;
-  color: #f4e8df;
+  color: #f2f7ff;
   font-size: 14px;
   line-height: 1.5;
 }
@@ -582,8 +576,8 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
   display: grid;
   gap: 17px;
   padding: 26px 7vw 30px;
-  border-top: 1px solid rgba(255,217,26,.14);
-  color: #b9aaa2;
+  border-top: 1px solid rgba(255,255,255,.13);
+  color: #c7d7eb;
   text-align: center;
   font-size: 12px;
   font-weight: 800;
@@ -592,7 +586,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .footer-bottom-links { display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; }
 .footer-bottom-links button {
   padding: 0;
-  color: #9f9189;
+  color: #9db2cf;
   background: transparent;
   font-size: 10px;
   font-weight: 900;
