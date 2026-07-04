@@ -18,6 +18,7 @@ import {
 const MAP_URL = 'https://www.igta5.com/images/gtav-map-atlas-huge.jpg'
 const categories = ['Menus', 'Burgers', 'Accompagnements', 'Boissons', 'Desserts']
 const badgeOptions = ['', 'Nouveau', 'Populaire', 'Edition limitee']
+const applicationRoleOptions = rankOptions.slice(rankOptions.indexOf('Equipier Formateur') + 1)
 
 const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(value)
 const fullName = user => `${user?.firstName || user?.first_name || ''} ${user?.lastName || user?.last_name || ''}`.trim()
@@ -29,6 +30,15 @@ const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u
 const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
 const isManagerRole = role => managerRoles.includes(normalizeRole(role))
 const canManage = user => isManagerRole(user?.role) || user?.permissions?.includes('admin')
+const customerIdOf = customer => customer?.id || customer?.auth_id
+const loyaltyPointsFor = (customer, orders = [], loyaltyEntries = []) => {
+  const id = customerIdOf(customer)
+  const paidOrders = orders.filter(order => (order.customerId === id || order.customer_id === id) && Boolean(order.paid) && order.status !== 'Annulee').length
+  const manualPoints = loyaltyEntries
+    .filter(entry => entry.customerId === id || entry.customer_id === id)
+    .reduce((sum, entry) => sum + Number(entry.points || 0), 0)
+  return paidOrders + manualPoints
+}
 
 function Brand({ compact = false }) {
   return <img className={compact ? 'brand compact' : 'brand'} src="/assets/upnatom-brand-transparent.png" alt="Up-n-Atom Hamburgers" />
@@ -303,7 +313,7 @@ function Recruitment({ restaurants, onSubmitApplication }) {
   const [form, setForm] = useState({
     fullName: '',
     phone: '',
-    role: rankOptions[0],
+    role: applicationRoleOptions[0],
     restaurant: selectedRestaurant,
     message: '',
   })
@@ -321,7 +331,7 @@ function Recruitment({ restaurants, onSubmitApplication }) {
         status: 'Nouvelle',
         createdAt: new Date().toISOString(),
       })
-      setForm({ fullName: '', phone: '', role: rankOptions[0], restaurant: selectedRestaurant, message: '' })
+      setForm({ fullName: '', phone: '', role: applicationRoleOptions[0], restaurant: selectedRestaurant, message: '' })
       setSent(true)
     } catch (err) {
       setError(err.message || 'Impossible d’envoyer la candidature.')
@@ -329,11 +339,11 @@ function Recruitment({ restaurants, onSubmitApplication }) {
   }
   return (
     <main className="content-section page-top">
-      <div className="section-heading"><span>Recrutement</span><h1>Rejoignez l’equipe</h1><p>Les candidatures sont actuellement ouvertes uniquement pour le restaurant de Roxwood.</p></div>
-      <div className="rank-grid">{rankOptions.map(rank => <article key={rank}><BriefcaseBusiness /><h3>{rank}</h3></article>)}</div>
+      <div className="section-heading"><span>Recrutement</span><h1>Rejoignez l’equipe</h1><p>Les candidatures sont ouvertes uniquement pour les postes d’entree. Les postes Equipier Formateur et superieurs sont accessibles par promotion interne.</p></div>
+      <div className="rank-grid">{applicationRoleOptions.map(rank => <article key={rank}><BriefcaseBusiness /><h3>{rank}</h3></article>)}</div>
       <form className="application-form" onSubmit={submit}>
         <h2>Candidature</h2><div className="form-row"><input required placeholder="Nom et prenom" value={form.fullName} onChange={event => setForm({ ...form, fullName: event.target.value })} /><input required placeholder="Telephone" value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></div>
-        <div className="form-row"><select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>{rankOptions.map(rank => <option key={rank}>{rank}</option>)}</select><select value={form.restaurant} onChange={event => setForm({ ...form, restaurant: event.target.value })}>{hiringRestaurants.length ? hiringRestaurants.map(item => <option key={item.id}>{item.name}</option>) : <option>{selectedRestaurant}</option>}</select></div>
+        <div className="form-row"><select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>{applicationRoleOptions.map(rank => <option key={rank}>{rank}</option>)}</select><select value={form.restaurant} onChange={event => setForm({ ...form, restaurant: event.target.value })}>{hiringRestaurants.length ? hiringRestaurants.map(item => <option key={item.id}>{item.name}</option>) : <option>{selectedRestaurant}</option>}</select></div>
         <textarea required placeholder="Votre motivation et vos disponibilites" value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} /><button className="primary">Envoyer la candidature</button>{sent && <p className="success-text">Candidature enregistree.</p>}{error && <p className="form-error">{error}</p>}
       </form>
     </main>
@@ -369,11 +379,36 @@ function AuthPage({ portal, onLogin, onRegister, navigate }) {
   )
 }
 
-function CustomerAccount({ user, orders, navigate }) {
-  const own = orders.filter(order => order.customerId === user.id)
+function LoyaltyCard({ points }) {
+  const rewards = Math.floor(points / 10)
+  const active = points > 0 ? points % 10 || 10 : 0
+  const remaining = points > 0 && points % 10 === 0 ? 0 : 10 - active
+  return (
+    <section className="loyalty-panel">
+      <div>
+        <StarLoyalty />
+        <span>Carte fidelite Atom Club</span>
+        <h2>{points} tampon{points > 1 ? 's' : ''}</h2>
+        <p>{rewards > 0 ? `${rewards} avantage${rewards > 1 ? 's' : ''} debloque${rewards > 1 ? 's' : ''}.` : `${remaining} tampon${remaining > 1 ? 's' : ''} avant la prochaine recompense.`}</p>
+      </div>
+      <div className="stamp-grid">{Array.from({ length: 10 }).map((_, index) => <span className={index < active ? 'active' : ''} key={index}>A</span>)}</div>
+    </section>
+  )
+}
+
+function StarLoyalty() {
+  return <div className="loyalty-mark">A</div>
+}
+
+function CustomerAccount({ user, orders, loyaltyEntries, navigate }) {
+  const own = orders.filter(order => order.customerId === user.id || order.customer_id === user.id)
+  const loyaltyPoints = loyaltyPointsFor(user, orders, loyaltyEntries)
+  const manualEntries = loyaltyEntries.filter(entry => entry.customerId === user.id || entry.customer_id === user.id)
   return (
     <main className="content-section page-top">
       <div className="account-heading"><div><span>Compte client</span><h1>Bonjour {user.firstName || user.first_name}</h1></div><button className="primary" onClick={() => navigate('menu')}><ShoppingBag />Nouvelle commande</button></div>
+      <LoyaltyCard points={loyaltyPoints} />
+      {!!manualEntries.length && <section className="loyalty-history"><h2>Ajouts manuels</h2>{manualEntries.slice(0, 5).map(entry => <article key={entry.id}><strong>+{entry.points} tampon{Number(entry.points) > 1 ? 's' : ''}</strong><span>{entry.reason || 'Paiement caisse'} · {new Date(entry.createdAt || entry.created_at || Date.now()).toLocaleDateString('fr-FR')}</span></article>)}</section>}
       <div className="order-history">{!own.length && <div className="empty-card"><PackageCheck /><h2>Aucune commande</h2><p>Vos prochaines commandes apparaitront ici.</p></div>}{own.map(order => <article className="history-card" key={order.id}><header><strong>{order.id}</strong><div className="badge-row"><StatusBadge status={order.status} /><PaymentBadge paid={Boolean(order.paid)} /></div></header><p>{new Date(order.createdAt || order.created_at).toLocaleString('fr-FR')}</p><div>{order.items.map(item => <span key={item.id}>{item.quantity} x {item.name}</span>)}</div><footer><span>{order.address}</span><strong>{money(order.total)}</strong></footer><OrderProgress status={order.status} /></article>)}</div>
     </main>
   )
@@ -535,15 +570,32 @@ function ClockPage({ user, entries, onSubmit }) {
   return <EmployeePage title="Mes heures" subtitle="Declare simplement le nombre d’heures effectuees."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Clock3 /><h2>Nouvelle declaration</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Nombre d’heures<input required min="0.25" max="24" step="0.25" type="number" placeholder="Ex. 7.5" value={form.hours} onChange={event => setForm({ ...form, hours: event.target.value })} /></label><label>Commentaire<textarea placeholder="Facultatif" value={form.comment} onChange={event => setForm({ ...form, comment: event.target.value })} /></label><button className="primary"><Save />Enregistrer mes heures</button></form><section className="hours-history"><h2>Mes dernieres declarations</h2>{!ownEntries.length && <p>Aucune heure declaree.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{Number(entry.hours).toLocaleString('fr-FR')} h</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')}</span></div><p>{entry.comment || 'Aucun commentaire'}</p></article>)}</section></div></EmployeePage>
 }
 
-function CashPage({ user, entries, onSubmit }) {
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', note: '' })
+function CashPage({ user, entries, customers, onSubmit, onSubmitLoyalty }) {
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', customerId: '', loyaltyPoints: '0', note: '' })
   const ownEntries = entries.filter(entry => entry.employeeId === user.id || entry.employee_id === user.id)
   const submit = async event => {
     event.preventDefault()
-    await onSubmit({ id: uid('cash'), employeeId: user.id, employeeName: fullName(user), date: form.date, amount: Number(form.amount), method: form.method, note: form.note, createdAt: new Date().toISOString() })
-    setForm({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', note: '' })
+    const cashEntry = { id: uid('cash'), employeeId: user.id, employeeName: fullName(user), date: form.date, amount: Number(form.amount), method: form.method, note: form.note, createdAt: new Date().toISOString() }
+    await onSubmit(cashEntry)
+    const selectedCustomer = customers.find(customer => customerIdOf(customer) === form.customerId)
+    const points = Number(form.loyaltyPoints || 0)
+    if (selectedCustomer && points > 0) {
+      await onSubmitLoyalty({
+        id: uid('loyalty'),
+        customerId: customerIdOf(selectedCustomer),
+        customerName: fullName(selectedCustomer),
+        employeeId: user.id,
+        employeeName: fullName(user),
+        cashEntryId: cashEntry.id,
+        points,
+        amount: Number(form.amount),
+        reason: 'Paiement caisse',
+        createdAt: new Date().toISOString(),
+      })
+    }
+    setForm({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', customerId: '', loyaltyPoints: '0', note: '' })
   }
-  return <EmployeePage title="Compta" subtitle="Declare les encaissements faits hors commande du site."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Banknote /><h2>Nouvel encaissement</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Montant<input required min="0.01" step="0.01" type="number" placeholder="Ex. 250" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} /></label><label>Moyen de paiement<select value={form.method} onChange={event => setForm({ ...form, method: event.target.value })}><option>Especes</option><option>Carte</option><option>Virement</option><option>Autre</option></select></label><label>Note<textarea placeholder="Ex. vente comptoir, evenement, livraison directe..." value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} /></label><button className="primary"><Save />Enregistrer l’encaissement</button></form><section className="hours-history"><h2>Mes derniers encaissements</h2>{!ownEntries.length && <p>Aucun encaissement declare.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{money(entry.amount)}</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')} · {entry.method}</span></div><p>{entry.note || 'Aucune note'}</p></article>)}</section></div></EmployeePage>
+  return <EmployeePage title="Compta" subtitle="Declare les encaissements faits hors commande du site."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Banknote /><h2>Nouvel encaissement</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Montant<input required min="0.01" step="0.01" type="number" placeholder="Ex. 250" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} /></label><label>Moyen de paiement<select value={form.method} onChange={event => setForm({ ...form, method: event.target.value })}><option>Especes</option><option>Carte</option><option>Virement</option><option>Autre</option></select></label><label>Client fidelite<select value={form.customerId} onChange={event => setForm({ ...form, customerId: event.target.value, loyaltyPoints: event.target.value ? '1' : '0' })}><option value="">Aucun client</option>{customers.map(customer => <option value={customerIdOf(customer)} key={customerIdOf(customer)}>{fullName(customer) || customer.email}</option>)}</select></label><label>Tampons a ajouter<input min="0" max="20" step="1" type="number" value={form.loyaltyPoints} onChange={event => setForm({ ...form, loyaltyPoints: event.target.value })} /></label><label>Note<textarea placeholder="Ex. vente comptoir, evenement, livraison directe..." value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} /></label><button className="primary"><Save />Enregistrer l’encaissement</button></form><section className="hours-history"><h2>Mes derniers encaissements</h2>{!ownEntries.length && <p>Aucun encaissement declare.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{money(entry.amount)}</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')} · {entry.method}</span></div><p>{entry.note || 'Aucune note'}</p></article>)}</section></div></EmployeePage>
 }
 
 function TaxDocumentPanel({ orders }) {
@@ -597,7 +649,7 @@ function RevenuePanel({ staff, orders, cashEntries }) {
   )
 }
 
-function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, tickerMessages, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, createTickerMessage, updateTickerMessage, deleteTickerMessage, saveSettings }) {
+function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries, restaurants, promotions, tickerMessages, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, createTickerMessage, updateTickerMessage, deleteTickerMessage, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
   const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', badge: '', stock: 50, available: true, featured: false }
@@ -681,7 +733,7 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, p
         </div>
       </section>}
       {tab === 'staff' && <><form className="admin-form" onSubmit={addStaff}><h2>Creer un compte employe</h2><div className="form-row"><input required placeholder="Prenom" value={draftStaff.firstName} onChange={e => setDraftStaff({ ...draftStaff, firstName: e.target.value })} /><input required placeholder="Nom" value={draftStaff.lastName} onChange={e => setDraftStaff({ ...draftStaff, lastName: e.target.value })} /></div><div className="form-row"><input required placeholder="Identifiant" value={draftStaff.username} onChange={e => setDraftStaff({ ...draftStaff, username: e.target.value })} /><input required type="email" placeholder="E-mail" value={draftStaff.email} onChange={e => setDraftStaff({ ...draftStaff, email: e.target.value })} /></div><div className="form-row"><input required placeholder="Mot de passe temporaire" value={draftStaff.password} onChange={e => setDraftStaff({ ...draftStaff, password: e.target.value })} /><select value={draftStaff.role} onChange={e => setDraftStaff({ ...draftStaff, role: e.target.value })}>{rankOptions.map(item => <option key={item}>{item}</option>)}</select></div><div className="form-row"><input placeholder="Poste" value={draftStaff.position} onChange={e => setDraftStaff({ ...draftStaff, position: e.target.value })} /><select value={draftStaff.restaurant} onChange={e => setDraftStaff({ ...draftStaff, restaurant: e.target.value })}><option value="">Restaurant</option>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div><div className="form-row"><input placeholder="Telephone" value={draftStaff.phone} onChange={e => setDraftStaff({ ...draftStaff, phone: e.target.value })} /><input placeholder="IBAN" value={draftStaff.iban} onChange={e => setDraftStaff({ ...draftStaff, iban: e.target.value })} /></div><button className="primary"><Plus />Creer le compte</button></form><div className="people-admin-grid">{staff.map(item => <article className="person-admin-card" key={item.id}><header><div className="avatar">{fullName(item).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(item)}</h3><span>{item.role}</span></div></header><dl><div><dt>Poste</dt><dd>{item.position || '-'}</dd></div><div><dt>Restaurant</dt><dd>{item.restaurant || '-'}</dd></div><div><dt>Telephone</dt><dd>{item.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{item.email}</dd></div><div className="full"><dt>IBAN</dt><dd>{item.iban || 'Non renseigne'}</dd></div></dl><footer><button onClick={() => setEditingStaff(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteStaff(item)}><Trash2 /></button></footer></article>)}</div></>}
-      {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div className="full"><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
+      {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const id = customerIdOf(customer); const history = orders.filter(order => order.customerId === id || order.customer_id === id); const points = loyaltyPointsFor(customer, orders, loyaltyEntries); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''} · {points} tampon{points > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div><div><dt>Carte fidelite</dt><dd>{points}/10</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
       {tab === 'restaurants' && <div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button></div></article>)}</div>}
       {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Creer une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input required placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><button className="primary"><Plus />Publier la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Masquee'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => togglePromotion(item)} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
@@ -764,6 +816,7 @@ export default function App() {
   const [customers, setCustomers] = useState([])
   const [timeEntries, setTimeEntries] = useState([])
   const [cashEntries, setCashEntries] = useState([])
+  const [loyaltyEntries, setLoyaltyEntries] = useState([])
   const [events, setEvents] = useState([])
   const [orders, setOrders] = useState([])
   const [announcements, setAnnouncements] = useState(announcementsSeed)
@@ -784,8 +837,12 @@ export default function App() {
         console.warn('ticker_messages unavailable', error)
         return tickerMessagesSeed
       })
-      const [m, r, s, e, o, a, d, p, t, h, cash, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions'].map(loadCollection), loadTickerMessages(), ...['time_entries', 'cash_entries', 'applications'].map(loadCollection), loadCustomers()])
-      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTickerMessages(t); setTimeEntries(h); setCashEntries(cash); setApplications(apps); setCustomers(c)
+      const loadLoyaltyEntries = () => loadCollection('loyalty_entries').catch(error => {
+        console.warn('loyalty_entries unavailable', error)
+        return []
+      })
+      const [m, r, s, e, o, a, d, p, t, h, cash, loyalty, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions'].map(loadCollection), loadTickerMessages(), ...['time_entries', 'cash_entries'].map(loadCollection), loadLoyaltyEntries(), loadCollection('applications'), loadCustomers()])
+      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTickerMessages(t); setTimeEntries(h); setCashEntries(cash); setLoyaltyEntries(loyalty); setApplications(apps); setCustomers(c)
       setSettings(await loadSettings())
     } catch (error) { console.error(error); setToast('Certaines donnees n’ont pas pu etre chargees.') }
   }
@@ -802,7 +859,7 @@ export default function App() {
     if (!supabase) return () => { window.removeEventListener('storage', localRefresh); window.removeEventListener('atom:data', localRefresh) }
 
     const channel = supabase.channel('upnatom-live')
-    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'applications', 'menu', 'restaurants', 'promotions', 'ticker_messages', 'settings'].forEach(table => {
+    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'loyalty_entries', 'applications', 'menu', 'restaurants', 'promotions', 'ticker_messages', 'settings'].forEach(table => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, localRefresh)
     })
     channel.subscribe()
@@ -854,6 +911,7 @@ export default function App() {
   const updateApplication = async (id, patch) => { await updateRecord('applications', id, patch); setApplications(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Candidature mise a jour.') }
   const submitHours = async form => { await insertRecord('time_entries', form); setTimeEntries(current => [form, ...current]); setToast('Heures enregistrees.') }
   const submitCash = async form => { await insertRecord('cash_entries', form); setCashEntries(current => [form, ...current]); setToast('Encaissement enregistre.') }
+  const submitLoyalty = async form => { const saved = await insertRecord('loyalty_entries', form); setLoyaltyEntries(current => [saved, ...current]); setToast('Carte fidelite mise a jour.') }
   const saveSettings = async value => { await updateSettings(value); setSettings(value); setToast('Etat du service mis a jour.') }
   const createMenuItem = async form => { await insertRecord('menu', form); setMenu(current => [form, ...current]); setToast('Produit ajoute a la carte.') }
   const updateMenuItem = async (id, patch) => { await updateRecord('menu', id, patch); setMenu(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Produit mis a jour.') }
@@ -887,9 +945,9 @@ export default function App() {
     if (page === 'employee-documents') content = <DocumentsPage documents={documents} />
     if (page === 'employee-announcements') content = <AnnouncementsPage announcements={announcements} canCreate={canManage(user)} onCreate={createAnnouncement} />
     if (page === 'employee-clock') content = <ClockPage user={user} entries={timeEntries} onSubmit={submitHours} />
-    if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} onSubmit={submitCash} />
+    if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} customers={customers} onSubmit={submitCash} onSubmitLoyalty={submitLoyalty} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} tickerMessages={tickerMessages} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} createTickerMessage={createTickerMessage} updateTickerMessage={updateTickerMessage} deleteTickerMessage={deleteTickerMessage} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
+    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} loyaltyEntries={loyaltyEntries} restaurants={restaurants} promotions={promotions} tickerMessages={tickerMessages} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} createTickerMessage={createTickerMessage} updateTickerMessage={updateTickerMessage} deleteTickerMessage={deleteTickerMessage} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     return <>{intro}<EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
@@ -901,6 +959,6 @@ export default function App() {
   if (page === 'promos') content = <PromosPage promotions={promotions} />
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />
   if (page === 'recruitment') content = <Recruitment restaurants={restaurants} onSubmitApplication={submitApplication} />
-  if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
+  if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} loyaltyEntries={loyaltyEntries} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
   return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} tickerMessages={tickerMessages} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
 }

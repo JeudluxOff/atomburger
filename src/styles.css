@@ -412,6 +412,83 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
 .history-card > p { color: var(--muted); font-size: 13px; }
 .history-card > div:not(.order-progress) { display: grid; gap: 4px; padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .history-card > footer { padding: 14px 0; }
+.loyalty-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(260px, .7fr) 1fr;
+  gap: 24px;
+  align-items: center;
+  margin-bottom: 22px;
+  padding: 26px;
+  overflow: hidden;
+  color: white;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 85% 18%, rgba(255,217,26,.45), transparent 0 22%),
+    linear-gradient(135deg, #1b1410, #8f0717 52%, #d20b24);
+  box-shadow: 0 18px 40px rgba(72, 15, 12, .18);
+}
+.loyalty-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .13;
+  background-image: repeating-linear-gradient(135deg, transparent 0 18px, #fff 19px 20px);
+}
+.loyalty-panel > * { position: relative; z-index: 1; }
+.loyalty-panel span { color: var(--yellow); font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: .7px; }
+.loyalty-panel h2 { margin: 8px 0 6px; font-size: 45px; line-height: .95; }
+.loyalty-panel p { margin: 0; color: #ffeec7; font-weight: 700; }
+.loyalty-mark {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  color: var(--red);
+  border: 3px solid white;
+  border-radius: 50%;
+  background: var(--yellow);
+  font-family: "Barlow Condensed", Impact, sans-serif;
+  font-size: 34px;
+  font-weight: 900;
+}
+.stamp-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(42px, 1fr));
+  gap: 10px;
+}
+.stamp-grid span {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  color: rgba(255,255,255,.44);
+  border: 2px dashed rgba(255,255,255,.36);
+  border-radius: 50%;
+  font-family: "Barlow Condensed", Impact, sans-serif;
+  font-size: 24px;
+  font-weight: 900;
+}
+.stamp-grid span.active {
+  color: var(--red);
+  border-style: solid;
+  border-color: white;
+  background: var(--yellow);
+  box-shadow: 0 8px 16px rgba(0,0,0,.18);
+}
+.loyalty-history {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+}
+.loyalty-history h2 { margin: 0; font-size: 28px; }
+.loyalty-history article { display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.loyalty-history article strong { color: var(--red); }
+.loyalty-history article span { color: var(--muted); font-size: 12px; }
 .order-progress { display: grid; grid-template-columns: repeat(5, 1fr); padding-top: 15px; }
 .order-progress > div { position: relative; text-align: center; color: #a99e98; }
 .order-progress > div::before { content: ""; position: absolute; left: -50%; right: 50%; top: 6px; height: 3px; background: #ddd2cb; }
@@ -1314,6 +1391,7 @@ label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
   .hero-special { transform: none; }
   .features, .promo-grid, .menu-layout, .restaurant-layout, .checkout-grid, .auth-page, .dashboard-grid, .orders-workspace { grid-template-columns: 1fr; }
   .features article { border-right: 0; border-bottom: 1px solid #4b3931; }
+  .loyalty-panel { grid-template-columns: 1fr; }
   .content-section { padding: 45px 20px; }
   .cart-panel { position: static; }
   .rank-grid, .document-grid { grid-template-columns: 1fr; }

@@ -20,6 +20,7 @@ const seeds = {
   promotions: promotionsSeed,
   ticker_messages: tickerMessagesSeed,
   applications: [],
+  loyalty_entries: [],
   settings: { acceptingOrders: true },
 }
 

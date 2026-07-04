@@ -62,6 +62,19 @@ create table if not exists cash_entries (
   "createdAt" timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
+create table if not exists loyalty_entries (
+  id text primary key,
+  "customerId" uuid references auth.users(id) on delete cascade,
+  "customerName" text not null default '',
+  "employeeId" text not null default '',
+  "employeeName" text not null default '',
+  "cashEntryId" text,
+  points integer not null default 1 check (points > 0),
+  amount numeric(10,2) default 0,
+  reason text default 'Paiement caisse',
+  "createdAt" timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
 create table if not exists applications (
   id text primary key,
   "fullName" text not null,
@@ -102,6 +115,7 @@ alter table documents enable row level security;
 alter table settings enable row level security;
 alter table time_entries enable row level security;
 alter table cash_entries enable row level security;
+alter table loyalty_entries enable row level security;
 alter table applications enable row level security;
 
 drop policy if exists "public reads menu" on menu;
@@ -131,6 +145,10 @@ drop policy if exists "managers manage hours" on time_entries;
 drop policy if exists "employees read cash entries" on cash_entries;
 drop policy if exists "employees add cash entries" on cash_entries;
 drop policy if exists "managers manage cash entries" on cash_entries;
+drop policy if exists "customers read own loyalty entries" on loyalty_entries;
+drop policy if exists "employees read loyalty entries" on loyalty_entries;
+drop policy if exists "employees add loyalty entries" on loyalty_entries;
+drop policy if exists "managers manage loyalty entries" on loyalty_entries;
 drop policy if exists "employees read announcements" on announcements;
 drop policy if exists "managers manage announcements" on announcements;
 drop policy if exists "employees read documents" on documents;
@@ -167,6 +185,10 @@ create policy "managers manage hours" on time_entries for all using (is_manager(
 create policy "employees read cash entries" on cash_entries for select using (is_employee());
 create policy "employees add cash entries" on cash_entries for insert with check (is_employee());
 create policy "managers manage cash entries" on cash_entries for all using (is_manager()) with check (is_manager());
+create policy "customers read own loyalty entries" on loyalty_entries for select using (auth.uid() = "customerId");
+create policy "employees read loyalty entries" on loyalty_entries for select using (is_employee());
+create policy "employees add loyalty entries" on loyalty_entries for insert with check (is_employee());
+create policy "managers manage loyalty entries" on loyalty_entries for all using (is_manager()) with check (is_manager());
 create policy "employees read announcements" on announcements for select using (is_employee());
 create policy "managers manage announcements" on announcements for all using (is_manager()) with check (is_manager());
 create policy "employees read documents" on documents for select using (is_employee());
@@ -197,7 +219,7 @@ insert into settings (id) values ('global') on conflict (id) do nothing;
 do $$
 declare table_name text;
 begin
-  foreach table_name in array array['orders','staff','profiles','events','announcements','documents','time_entries','cash_entries','applications','menu','restaurants','promotions','settings']
+  foreach table_name in array array['orders','staff','profiles','events','announcements','documents','time_entries','cash_entries','loyalty_entries','applications','menu','restaurants','promotions','settings']
   loop
     if not exists (
       select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = table_name
