@@ -232,3 +232,20 @@ export async function updateCustomer(id, patch) {
   if (error) throw error
   return data
 }
+
+export async function removeCustomer(customer) {
+  if (!supabase) {
+    writeLocal('customers', readLocal('customers').filter(item => item.id !== customer.id))
+    return
+  }
+  const { data: session } = await supabase.auth.getSession()
+  const response = await fetch('/api/customer-user', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.session?.access_token}` },
+    body: JSON.stringify({ id: customer.id, authId: customer.auth_id || customer.id }),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || 'Suppression impossible.')
+  }
+}

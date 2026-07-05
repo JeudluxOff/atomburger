@@ -15,16 +15,31 @@ const serviceRoleKey =
   process.env.Storage_SUPABASE_SECRET_KEY
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST')
+  if (!['POST', 'DELETE'].includes(req.method)) {
+    res.setHeader('Allow', 'POST, DELETE')
     return res.status(405).json({ error: 'Methode non autorisee.' })
   }
   if (!supabaseUrl || !serviceRoleKey) return res.status(500).json({ error: 'Configuration Supabase incomplete.' })
+  const admin = createClient(supabaseUrl, serviceRoleKey)
+
+  if (req.method === 'DELETE') {
+    const token = (req.headers.authorization || '').replace('Bearer ', '')
+    if (!token) return res.status(401).json({ error: 'Session requise.' })
+    const { data: auth, error: authError } = await admin.auth.getUser(token)
+    if (authError || !auth.user) return res.status(401).json({ error: 'Session invalide.' })
+    const { data: profile } = await admin.from('profiles').select('permissions').eq('id', auth.user.id).single()
+    if (!profile?.permissions?.includes('admin')) return res.status(403).json({ error: 'Droits de direction requis.' })
+
+    const { id, authId } = req.body || {}
+    if (!id && !authId) return res.status(400).json({ error: 'Client introuvable.' })
+    if (id) await admin.from('profiles').delete().eq('id', id)
+    if (authId) await admin.auth.admin.deleteUser(authId)
+    return res.status(204).end()
+  }
 
   const { email, password, firstName, lastName, phone = '', address = '' } = req.body || {}
   if (!email || !password || !firstName || !lastName) return res.status(400).json({ error: 'Informations incompletes.' })
 
-  const admin = createClient(supabaseUrl, serviceRoleKey)
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
