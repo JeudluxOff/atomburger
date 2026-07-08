@@ -8,36 +8,30 @@ import {
 import {
   announcementsSeed, docsSeed, menuSeed, orderStatuses, promotionsSeed, rankOptions,
   restaurantsSeed, staffSeed,
-  tickerMessagesSeed,
 } from './data'
 import {
-  createEmployee, deleteRecord, insertRecord, isDemoMode, loadCollection, loadCustomers, loadSettings, removeCustomer, removeEmployee, supabase,
-  signIn, signOut, signUpCustomer, updateCustomer, updateEmployee, updateRecord, updateSettings,
+  createEmployee, deleteRecord, insertRecord, isDemoMode, loadCollection, loadCustomers, loadSettings, removeEmployee, supabase,
+  replaceCollection, signIn, signOut, signUpCustomer, updateCustomer, updateEmployee, updateRecord, updateSettings,
 } from './store'
 
 const MAP_URL = 'https://www.igta5.com/images/gtav-map-atlas-huge.jpg'
+const ROXWOOD_MAP_URL = '/assets/maps/roxwood-map.png'
+
+const DELIVERY_ZONES = [
+  { id: 'roxwood', label: 'Roxwood', fee: 50 },
+  { id: 'sandy-shores', label: 'Sandy Shores', fee: 50 },
+  { id: 'los-santos', label: 'Los Santos', fee: 100 },
+]
+
 const categories = ['Menus', 'Burgers', 'Accompagnements', 'Boissons', 'Desserts']
-const badgeOptions = ['', 'Nouveau', 'Populaire', 'Edition limitee']
-const applicationRoleOptions = rankOptions.slice(rankOptions.indexOf('Equipier Formateur') + 1)
 
 const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(value)
 const fullName = user => `${user?.firstName || user?.first_name || ''} ${user?.lastName || user?.last_name || ''}`.trim()
 const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
-const isProductAvailable = product => product?.available !== false
-const productBadge = product => !isProductAvailable(product) ? 'Indisponible' : product?.badge || (product?.featured ? 'Populaire' : '')
 const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f']/g, '').replace(/[’']/g, '').toLowerCase().trim()
 const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
 const isManagerRole = role => managerRoles.includes(normalizeRole(role))
 const canManage = user => isManagerRole(user?.role) || user?.permissions?.includes('admin')
-const customerIdOf = customer => customer?.id || customer?.auth_id
-const loyaltyPointsFor = (customer, orders = [], loyaltyEntries = []) => {
-  const id = customerIdOf(customer)
-  const paidOrders = orders.filter(order => (order.customerId === id || order.customer_id === id) && Boolean(order.paid) && order.status !== 'Annulee').length
-  const manualPoints = loyaltyEntries
-    .filter(entry => entry.customerId === id || entry.customer_id === id)
-    .reduce((sum, entry) => sum + Number(entry.points || 0), 0)
-  return paidOrders + manualPoints
-}
 
 function Brand({ compact = false }) {
   return <img className={compact ? 'brand compact' : 'brand'} src="/assets/upnatom-brand-transparent.png" alt="Up-n-Atom Hamburgers" />
@@ -45,10 +39,6 @@ function Brand({ compact = false }) {
 
 function Character({ side = 'left' }) {
   return <div className={`character-crop ${side}`} aria-hidden="true"><img src="/assets/upnatom-brand-transparent.png" alt="" /></div>
-}
-
-function HeroCharacter() {
-  return <img className="hero-character" src="/assets/hero-character.png" alt="" aria-hidden="true" />
 }
 
 function Toast({ message, onClose }) {
@@ -70,68 +60,42 @@ function Modal({ title, children, onClose, wide = false }) {
   )
 }
 
-function TickerBar({ messages }) {
-  const activeMessages = messages.filter(item => item.active !== false && item.message?.trim())
-  if (!activeMessages.length) return null
-  const text = activeMessages.map(item => item.message.trim()).join('     •     ')
-  const repeatCount = Math.max(6, Math.ceil(260 / Math.max(text.length, 1)))
-  const repeatedText = Array.from({ length: repeatCount }, () => text).join('     •     ')
-  const duration = Math.min(70, Math.max(18, repeatedText.length * 0.22))
-  return (
-    <div className="ticker-bar" aria-label="Messages importants" style={{ '--ticker-duration': `${duration}s` }}>
-      <div className="ticker-track">
-        <span>{repeatedText}</span>
-        <span aria-hidden="true">{repeatedText}</span>
-      </div>
-    </div>
-  )
-}
-
-function PublicHeader({ page, navigate, cartCount, user, logout, tickerMessages }) {
+function PublicHeader({ page, navigate, cartCount, user, logout }) {
   const [open, setOpen] = useState(false)
   const links = [['home', 'Accueil'], ['menu', 'La carte'], ['promos', 'Promotions'], ['restaurants', 'Restaurants'], ['recruitment', 'Recrutement']]
   return (
-    <>
-      <header className="public-header">
-        <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Menu">{open ? <X /> : <MenuIcon />}</button>
-        <button className="brand-button" onClick={() => navigate('home')}><Brand compact /></button>
-        <nav className={open ? 'public-nav open' : 'public-nav'}>
-          {links.map(([key, label]) => <button className={page === key ? 'active' : ''} key={key} onClick={() => { navigate(key); setOpen(false) }}>{label}</button>)}
-        </nav>
-        <div className="header-actions">
-          <button className="cart-button" onClick={() => navigate('menu')}><ShoppingBag size={18} /><span>{cartCount}</span></button>
-          {user?.roleType === 'customer' ? (
-            <div className="account-menu"><button onClick={() => navigate('account')}><CircleUserRound size={19} />{user.firstName || user.first_name}</button><button className="logout-mini" onClick={logout}><LogOut size={17} /></button></div>
-          ) : <button className="account-button" onClick={() => navigate('customer-login')}><UserRound size={18} />Connexion</button>}
-          <button className="staff-button" onClick={() => navigate('employee-login')}>Espace equipe</button>
-        </div>
-      </header>
-      <TickerBar messages={tickerMessages} />
-    </>
+    <header className="public-header">
+      <button className="mobile-menu" onClick={() => setOpen(!open)} aria-label="Menu">{open ? <X /> : <MenuIcon />}</button>
+      <button className="brand-button" onClick={() => navigate('home')}><Brand compact /></button>
+      <nav className={open ? 'public-nav open' : 'public-nav'}>
+        {links.map(([key, label]) => <button className={page === key ? 'active' : ''} key={key} onClick={() => { navigate(key); setOpen(false) }}>{label}</button>)}
+      </nav>
+      <div className="header-actions">
+        <button className="cart-button" onClick={() => navigate('menu')}><ShoppingBag size={18} /><span>{cartCount}</span></button>
+        {user?.roleType === 'customer' ? (
+          <div className="account-menu"><button onClick={() => navigate('account')}><CircleUserRound size={19} />{user.firstName || user.first_name}</button><button className="logout-mini" onClick={logout}><LogOut size={17} /></button></div>
+        ) : <button className="account-button" onClick={() => navigate('customer-login')}><UserRound size={18} />Connexion</button>}
+        <button className="staff-button" onClick={() => navigate('employee-login')}>Espace equipe</button>
+      </div>
+    </header>
   )
 }
 
-function Home({ navigate, promotions, menu }) {
-  const activePromo = promotions.find(item => item.active)
-  const featuredProduct = menu.find(item => item.featured && isProductAvailable(item)) || menu.find(isProductAvailable) || menu[0]
-  const heroTitle = activePromo?.title || featuredProduct?.name || 'Double Atom'
-  const heroText = activePromo?.description || featuredProduct?.description || 'Double steak, double cheddar, cornichons et sauce maison.'
-  const heroValue = activePromo?.offer || (featuredProduct ? money(featuredProduct.price) : money(12.9))
-  const heroLabel = activePromo ? 'Offre active' : 'Menu vedette'
+function Home({ navigate, promotions }) {
   return (
     <main>
       <section className="hero">
         <div className="hero-overlay" />
-        <HeroCharacter />
+        <Character side="left" />
         <div className="hero-copy">
-          <span className="eyebrow"><Flame size={16} />Ouvert a San Andreas</span>
+          <span className="eyebrow"><Flame size={16} />Ouvert a Los Santos</span>
           <Brand />
           <h1>Des burgers qui passent a l’action.</h1>
           <p>Steaks grilles, cheddar fondant, frites dorees et shakes bien frais. Commandez en ligne et choisissez votre point de livraison sur la carte.</p>
           <div className="button-row"><button className="primary" onClick={() => navigate('menu')}>Commander</button><button className="secondary" onClick={() => navigate('restaurants')}>Trouver un restaurant</button></div>
         </div>
         <div className="hero-special">
-          <span>{heroLabel}</span><h2>{heroTitle}</h2><p>{heroText}</p><strong>{heroValue}</strong>
+          <span>Menu vedette</span><h2>Double Atom</h2><p>Double steak, double cheddar, cornichons et sauce maison.</p><strong>{money(12.9)}</strong>
         </div>
       </section>
       <section className="band features">
@@ -161,7 +125,6 @@ function MenuPage({ menu, cart, setCart, user, navigate, settings, placeOrder })
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
   const serviceAvailable = settings.acceptingOrders
   const add = product => setCart(current => {
-    if (!isProductAvailable(product)) return current
     const found = current.find(item => item.id === product.id)
     return found ? current.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item) : [...current, { ...product, quantity: 1 }]
   })
@@ -174,9 +137,9 @@ function MenuPage({ menu, cart, setCart, user, navigate, settings, placeOrder })
           <div className="category-tabs">{categories.map(item => <button className={category === item ? 'active' : ''} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
           <div className="product-grid">
             {menu.filter(item => item.category === category).map(product => (
-              <article className={`product-card ${!isProductAvailable(product) ? 'unavailable' : ''}`} key={product.id}>
+              <article className={`product-card ${!product.available ? 'unavailable' : ''}`} key={product.id}>
                 <div className={product.imageUrl || product.image_url ? 'product-visual has-image' : 'product-visual'}>{product.imageUrl || product.image_url ? <img src={product.imageUrl || product.image_url} alt={product.name} /> : <Utensils size={42} />}<span>{product.featured ? 'Signature' : product.category}</span></div>
-                <div className="product-info"><div className="product-badges">{productBadge(product) && <span className={`product-badge ${!isProductAvailable(product) ? 'off' : ''}`}>{productBadge(product)}</span>}</div><h3>{product.name}</h3><p>{product.description}</p><footer><strong>{money(product.price)}</strong><button disabled={!isProductAvailable(product)} onClick={() => add(product)}>{isProductAvailable(product) ? 'Ajouter' : 'Indisponible'}</button></footer></div>
+                <div className="product-info"><h3>{product.name}</h3><p>{product.description}</p><footer><strong>{money(product.price)}</strong><button disabled={!product.available} onClick={() => add(product)}>{product.available ? 'Ajouter' : 'Indisponible'}</button></footer></div>
               </article>
             ))}
           </div>
@@ -245,7 +208,9 @@ function SanAndreasMap({ marker, onMarker, restaurantMarkers = false, restaurant
       <div className="map-controls"><button onClick={() => setZoomAround(zoom + .35)}><Plus /></button><button onClick={() => setZoomAround(zoom - .35)}><Minus /></button><button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}><MapPin size={15} /></button></div>
       <div className="sa-map" onWheel={wheel} onMouseDown={startDrag} onMouseMove={moveDrag} onMouseUp={stopDrag} onMouseLeave={stopDrag} onClick={click} style={{ '--map-zoom': zoom, '--map-pan-x': `${pan.x}px`, '--map-pan-y': `${pan.y}px` }}>
         <div className="map-stage">
-          <img src={MAP_URL} alt="Carte de San Andreas" draggable="false" />
+          <img className="main-map-layer" src={MAP_URL} alt="Carte de San Andreas et Roxwood" draggable="false" />
+          <img className="roxwood-map-layer" src={ROXWOOD_MAP_URL} alt="Carte de Roxwood" draggable="false" />
+          <span className="roxwood-label">ROXWOOD</span>
           {restaurantMarkers && restaurants.filter(item => item.active).map(item => <button className="map-pin restaurant-pin" style={{ left: `${item.x}%`, top: `${item.y}%` }} key={item.id} title={item.name}><Store size={14} /></button>)}
           {marker && <span className="map-pin delivery-pin" style={{ left: `${marker.x}%`, top: `${marker.y}%` }}><MapPin /></span>}
         </div>
@@ -256,15 +221,19 @@ function SanAndreasMap({ marker, onMarker, restaurantMarkers = false, restaurant
 }
 
 function CheckoutModal({ user, cart, total, onClose, onSubmit }) {
-  const [form, setForm] = useState({ firstName: user.firstName || user.first_name || '', lastName: user.lastName || user.last_name || '', phone: user.phone || '', address: user.address || '', note: '', marker: null })
+  const [form, setForm] = useState({ firstName: user.firstName || user.first_name || '', lastName: user.lastName || user.last_name || '', phone: user.phone || '', address: user.address || '', note: '', marker: null, deliveryZone: 'roxwood' })
   const [error, setError] = useState('')
+  const selectedZone = DELIVERY_ZONES.find(zone => zone.id === form.deliveryZone) || DELIVERY_ZONES[0]
+  const deliveryFee = selectedZone.fee
+  const grandTotal = total + deliveryFee
   const submit = async event => {
     event.preventDefault()
     if (!form.firstName || !form.lastName || !form.phone || !form.address || !form.marker) return setError('Completez les coordonnees et placez la destination sur la carte.')
     await onSubmit({
       id: `ATM-${String(Date.now()).slice(-6)}`, customerId: user.id, customerName: `${form.firstName} ${form.lastName}`, phone: form.phone,
       address: form.address, markerX: form.marker.x, markerY: form.marker.y, note: form.note, status: 'Nouvelle', paid: false, assignedTo: '', createdAt: new Date().toISOString(),
-      items: cart.map(({ id, name, price, quantity }) => ({ id, name, price, quantity })), total,
+      deliveryZone: selectedZone.label, deliveryFee,
+      items: cart.map(({ id, name, price, quantity }) => ({ id, name, price, quantity })), total: grandTotal,
     })
   }
   return (
@@ -273,9 +242,10 @@ function CheckoutModal({ user, cart, total, onClose, onSubmit }) {
         <div className="checkout-fields">
           <div className="form-row"><label>Nom<input value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} /></label><label>Prenom<input value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} /></label></div>
           <label>Telephone<input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
+          <label>Zone de livraison<select value={form.deliveryZone} onChange={e => setForm({ ...form, deliveryZone: e.target.value })}>{DELIVERY_ZONES.map(zone => <option value={zone.id} key={zone.id}>{zone.label} — {money(zone.fee)}</option>)}</select></label>
           <label>Adresse ou indication precise<input placeholder="Ex. Alta Street, parking rouge" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></label>
           <label>Instruction de livraison<textarea placeholder="Facultatif" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></label>
-          <div className="checkout-summary"><span>{cart.reduce((sum, item) => sum + item.quantity, 0)} articles</span><strong>{money(total)}</strong></div>
+          <div className="checkout-total-box"><div><span>Sous-total · {cart.reduce((sum, item) => sum + item.quantity, 0)} articles</span><strong>{money(total)}</strong></div><div><span>Frais de livraison · {selectedZone.label}</span><strong>{money(deliveryFee)}</strong></div><div className="grand-total"><span>Total</span><strong>{money(grandTotal)}</strong></div></div>
           {error && <p className="form-error">{error}</p>}
           <button className="primary full">Envoyer la commande</button>
         </div>
@@ -289,7 +259,7 @@ function RestaurantsPage({ restaurants }) {
   const [selected, setSelected] = useState(restaurants[0]?.id)
   return (
     <main className="content-section page-top">
-      <div className="section-heading"><span>Restaurants</span><h1>Up-n-Atom dans San Andreas</h1><p>Retrouvez les points de service actifs sur la carte. Le recrutement est actuellement ouvert uniquement a Roxwood.</p></div>
+      <div className="section-heading"><span>Restaurants</span><h1>Up-n-Atom dans tout San Andreas</h1><p>Selectionnez un restaurant pour le retrouver sur la carte.</p></div>
       <div className="restaurant-layout">
         <SanAndreasMap restaurantMarkers restaurants={restaurants} />
         <div className="restaurant-list">{restaurants.filter(item => item.active).map(item => <button className={`restaurant-card ${selected === item.id ? 'active' : ''}`} onClick={() => setSelected(item.id)} key={item.id}><Store /><div><h3>{item.name}</h3><p>{item.hours}</p><span>{item.phone}</span></div></button>)}</div>
@@ -303,20 +273,15 @@ function PromosPage({ promotions }) {
 }
 
 function Recruitment({ restaurants, onSubmitApplication }) {
-  const hiringRestaurants = restaurants.filter(item => item.id === 'roxwood' || String(item.name).toLowerCase().includes('roxwood'))
-  const selectedRestaurant = hiringRestaurants[0]?.name || 'Up-n-Atom Roxwood'
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     fullName: '',
     phone: '',
-    role: applicationRoleOptions[0],
-    restaurant: selectedRestaurant,
+    role: rankOptions[0],
+    restaurant: restaurants[0]?.name || '',
     message: '',
   })
-  useEffect(() => {
-    if (form.restaurant !== selectedRestaurant) setForm(current => ({ ...current, restaurant: selectedRestaurant }))
-  }, [selectedRestaurant])
   const submit = async event => {
     event.preventDefault()
     setSent(false)
@@ -328,7 +293,7 @@ function Recruitment({ restaurants, onSubmitApplication }) {
         status: 'Nouvelle',
         createdAt: new Date().toISOString(),
       })
-      setForm({ fullName: '', phone: '', role: applicationRoleOptions[0], restaurant: selectedRestaurant, message: '' })
+      setForm({ fullName: '', phone: '', role: rankOptions[0], restaurant: restaurants[0]?.name || '', message: '' })
       setSent(true)
     } catch (err) {
       setError(err.message || 'Impossible d’envoyer la candidature.')
@@ -336,11 +301,11 @@ function Recruitment({ restaurants, onSubmitApplication }) {
   }
   return (
     <main className="content-section page-top">
-      <div className="section-heading"><span>Recrutement</span><h1>Rejoignez l’equipe</h1><p>Les candidatures sont ouvertes uniquement pour les postes d’entree. Les postes Equipier Formateur et superieurs sont accessibles par promotion interne.</p></div>
-      <div className="rank-grid">{applicationRoleOptions.map(rank => <article key={rank}><BriefcaseBusiness /><h3>{rank}</h3></article>)}</div>
+      <div className="section-heading"><span>Recrutement</span><h1>Rejoignez l’equipe</h1><p>Des postes en salle, en cuisine, en livraison et en encadrement.</p></div>
+      <div className="rank-grid">{rankOptions.map(rank => <article key={rank}><BriefcaseBusiness /><h3>{rank}</h3></article>)}</div>
       <form className="application-form" onSubmit={submit}>
         <h2>Candidature</h2><div className="form-row"><input required placeholder="Nom et prenom" value={form.fullName} onChange={event => setForm({ ...form, fullName: event.target.value })} /><input required placeholder="Telephone" value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></div>
-        <div className="form-row"><select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>{applicationRoleOptions.map(rank => <option key={rank}>{rank}</option>)}</select><select value={form.restaurant} onChange={event => setForm({ ...form, restaurant: event.target.value })}>{hiringRestaurants.length ? hiringRestaurants.map(item => <option key={item.id}>{item.name}</option>) : <option>{selectedRestaurant}</option>}</select></div>
+        <div className="form-row"><select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>{rankOptions.map(rank => <option key={rank}>{rank}</option>)}</select><select value={form.restaurant} onChange={event => setForm({ ...form, restaurant: event.target.value })}>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div>
         <textarea required placeholder="Votre motivation et vos disponibilites" value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} /><button className="primary">Envoyer la candidature</button>{sent && <p className="success-text">Candidature enregistree.</p>}{error && <p className="form-error">{error}</p>}
       </form>
     </main>
@@ -376,36 +341,11 @@ function AuthPage({ portal, onLogin, onRegister, navigate }) {
   )
 }
 
-function LoyaltyCard({ points }) {
-  const rewards = Math.floor(points / 10)
-  const active = points > 0 ? points % 10 || 10 : 0
-  const remaining = points > 0 && points % 10 === 0 ? 0 : 10 - active
-  return (
-    <section className="loyalty-panel">
-      <div>
-        <StarLoyalty />
-        <span>Carte fidelite Atom Club</span>
-        <h2>{points} tampon{points > 1 ? 's' : ''}</h2>
-        <p>{rewards > 0 ? `${rewards} avantage${rewards > 1 ? 's' : ''} debloque${rewards > 1 ? 's' : ''}.` : `${remaining} tampon${remaining > 1 ? 's' : ''} avant la prochaine recompense.`}</p>
-      </div>
-      <div className="stamp-grid">{Array.from({ length: 10 }).map((_, index) => <span className={index < active ? 'active' : ''} key={index}>A</span>)}</div>
-    </section>
-  )
-}
-
-function StarLoyalty() {
-  return <div className="loyalty-mark">A</div>
-}
-
-function CustomerAccount({ user, orders, loyaltyEntries, navigate }) {
-  const own = orders.filter(order => order.customerId === user.id || order.customer_id === user.id)
-  const loyaltyPoints = loyaltyPointsFor(user, orders, loyaltyEntries)
-  const manualEntries = loyaltyEntries.filter(entry => entry.customerId === user.id || entry.customer_id === user.id)
+function CustomerAccount({ user, orders, navigate }) {
+  const own = orders.filter(order => order.customerId === user.id)
   return (
     <main className="content-section page-top">
       <div className="account-heading"><div><span>Compte client</span><h1>Bonjour {user.firstName || user.first_name}</h1></div><button className="primary" onClick={() => navigate('menu')}><ShoppingBag />Nouvelle commande</button></div>
-      <LoyaltyCard points={loyaltyPoints} />
-      {!!manualEntries.length && <section className="loyalty-history"><h2>Ajouts manuels</h2>{manualEntries.slice(0, 5).map(entry => <article key={entry.id}><strong>+{entry.points} tampon{Number(entry.points) > 1 ? 's' : ''}</strong><span>{entry.reason || 'Paiement caisse'} · {new Date(entry.createdAt || entry.created_at || Date.now()).toLocaleDateString('fr-FR')}</span></article>)}</section>}
       <div className="order-history">{!own.length && <div className="empty-card"><PackageCheck /><h2>Aucune commande</h2><p>Vos prochaines commandes apparaitront ici.</p></div>}{own.map(order => <article className="history-card" key={order.id}><header><strong>{order.id}</strong><div className="badge-row"><StatusBadge status={order.status} /><PaymentBadge paid={Boolean(order.paid)} /></div></header><p>{new Date(order.createdAt || order.created_at).toLocaleString('fr-FR')}</p><div>{order.items.map(item => <span key={item.id}>{item.quantity} x {item.name}</span>)}</div><footer><span>{order.address}</span><strong>{money(order.total)}</strong></footer><OrderProgress status={order.status} /></article>)}</div>
     </main>
   )
@@ -481,9 +421,9 @@ function OrderDetail({ order, staff, onUpdate }) {
     <section className="order-detail dark-panel">
       <header><div><span>Commande</span><h2>{order.id}</h2></div><div className="badge-row"><StatusBadge status={order.status} /><PaymentBadge paid={Boolean(order.paid)} /></div></header>
       <div className="detail-grid"><div><small>Client</small><strong>{order.customerName || order.customer_name}</strong></div><div><small>Telephone</small><strong>{order.phone}</strong></div></div>
-      <div className="address-box"><MapPin /><div><small>Destination</small><strong>{order.address}</strong>{order.note && <span>{order.note}</span>}</div></div>
+      <div className="address-box"><MapPin /><div><small>Destination</small><strong>{order.address}</strong>{(order.deliveryZone || order.delivery_zone) && <span>Zone : {order.deliveryZone || order.delivery_zone} · Livraison : {money(order.deliveryFee ?? order.delivery_fee ?? 0)}</span>}{order.note && <span>{order.note}</span>}</div></div>
       <SanAndreasMap compact marker={{ x: order.markerX ?? order.marker_x, y: order.markerY ?? order.marker_y }} />
-      <div className="order-items">{order.items.map(item => <div key={item.id}><span>{item.quantity} x {item.name}</span><strong>{money(item.price * item.quantity)}</strong></div>)}<footer><span>Total</span><strong>{money(order.total)}</strong></footer></div>
+      <div className="order-items">{order.items.map(item => <div key={item.id}><span>{item.quantity} x {item.name}</span><strong>{money(item.price * item.quantity)}</strong></div>)}{Number(order.deliveryFee ?? order.delivery_fee ?? 0) > 0 && <div><span>Frais de livraison · {order.deliveryZone || order.delivery_zone}</span><strong>{money(order.deliveryFee ?? order.delivery_fee)}</strong></div>}<footer><span>Total</span><strong>{money(order.total)}</strong></footer></div>
       <div className="form-row"><label>Statut<select value={order.status} onChange={e => onUpdate(order.id, { status: e.target.value })}>{orderStatuses.map(item => <option key={item}>{item}</option>)}</select></label><label>Paiement<select value={order.paid ? 'paid' : 'unpaid'} onChange={e => onUpdate(order.id, { paid: e.target.value === 'paid' })}><option value="unpaid">Non payee</option><option value="paid">Payee</option></select></label><label>Attribuee a<select value={order.assignedTo || order.assigned_to || ''} onChange={e => onUpdate(order.id, { assignedTo: e.target.value })}><option value="">Non attribuee</option>{staff.map(member => <option value={member.id} key={member.id}>{fullName(member)}</option>)}</select></label></div>
     </section>
   )
@@ -567,32 +507,15 @@ function ClockPage({ user, entries, onSubmit }) {
   return <EmployeePage title="Mes heures" subtitle="Declare simplement le nombre d’heures effectuees."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Clock3 /><h2>Nouvelle declaration</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Nombre d’heures<input required min="0.25" max="24" step="0.25" type="number" placeholder="Ex. 7.5" value={form.hours} onChange={event => setForm({ ...form, hours: event.target.value })} /></label><label>Commentaire<textarea placeholder="Facultatif" value={form.comment} onChange={event => setForm({ ...form, comment: event.target.value })} /></label><button className="primary"><Save />Enregistrer mes heures</button></form><section className="hours-history"><h2>Mes dernieres declarations</h2>{!ownEntries.length && <p>Aucune heure declaree.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{Number(entry.hours).toLocaleString('fr-FR')} h</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')}</span></div><p>{entry.comment || 'Aucun commentaire'}</p></article>)}</section></div></EmployeePage>
 }
 
-function CashPage({ user, entries, customers, onSubmit, onSubmitLoyalty }) {
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', customerId: '', loyaltyPoints: '0', note: '' })
+function CashPage({ user, entries, onSubmit }) {
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', note: '' })
   const ownEntries = entries.filter(entry => entry.employeeId === user.id || entry.employee_id === user.id)
   const submit = async event => {
     event.preventDefault()
-    const cashEntry = { id: uid('cash'), employeeId: user.id, employeeName: fullName(user), date: form.date, amount: Number(form.amount), method: form.method, note: form.note, createdAt: new Date().toISOString() }
-    await onSubmit(cashEntry)
-    const selectedCustomer = customers.find(customer => customerIdOf(customer) === form.customerId)
-    const points = Number(form.loyaltyPoints || 0)
-    if (selectedCustomer && points > 0) {
-      await onSubmitLoyalty({
-        id: uid('loyalty'),
-        customerId: customerIdOf(selectedCustomer),
-        customerName: fullName(selectedCustomer),
-        employeeId: user.id,
-        employeeName: fullName(user),
-        cashEntryId: cashEntry.id,
-        points,
-        amount: Number(form.amount),
-        reason: 'Paiement caisse',
-        createdAt: new Date().toISOString(),
-      })
-    }
-    setForm({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', customerId: '', loyaltyPoints: '0', note: '' })
+    await onSubmit({ id: uid('cash'), employeeId: user.id, employeeName: fullName(user), date: form.date, amount: Number(form.amount), method: form.method, note: form.note, createdAt: new Date().toISOString() })
+    setForm({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', note: '' })
   }
-  return <EmployeePage title="Compta" subtitle="Declare les encaissements faits hors commande du site."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Banknote /><h2>Nouvel encaissement</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Montant<input required min="0.01" step="0.01" type="number" placeholder="Ex. 250" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} /></label><label>Moyen de paiement<select value={form.method} onChange={event => setForm({ ...form, method: event.target.value })}><option>Especes</option><option>Carte</option><option>Virement</option><option>Autre</option></select></label><label>Client fidelite<select value={form.customerId} onChange={event => setForm({ ...form, customerId: event.target.value, loyaltyPoints: event.target.value ? '1' : '0' })}><option value="">Aucun client</option>{customers.map(customer => <option value={customerIdOf(customer)} key={customerIdOf(customer)}>{fullName(customer) || customer.email}</option>)}</select></label><label>Tampons a ajouter<input min="0" max="20" step="1" type="number" value={form.loyaltyPoints} onChange={event => setForm({ ...form, loyaltyPoints: event.target.value })} /></label><label>Note<textarea placeholder="Ex. vente comptoir, evenement, livraison directe..." value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} /></label><button className="primary"><Save />Enregistrer l’encaissement</button></form><section className="hours-history"><h2>Mes derniers encaissements</h2>{!ownEntries.length && <p>Aucun encaissement declare.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{money(entry.amount)}</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')} · {entry.method}</span></div><p>{entry.note || 'Aucune note'}</p></article>)}</section></div></EmployeePage>
+  return <EmployeePage title="Compta" subtitle="Declare les encaissements faits hors commande du site."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Banknote /><h2>Nouvel encaissement</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Montant<input required min="0.01" step="0.01" type="number" placeholder="Ex. 250" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} /></label><label>Moyen de paiement<select value={form.method} onChange={event => setForm({ ...form, method: event.target.value })}><option>Especes</option><option>Carte</option><option>Virement</option><option>Autre</option></select></label><label>Note<textarea placeholder="Ex. vente comptoir, evenement, livraison directe..." value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} /></label><button className="primary"><Save />Enregistrer l’encaissement</button></form><section className="hours-history"><h2>Mes derniers encaissements</h2>{!ownEntries.length && <p>Aucun encaissement declare.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{money(entry.amount)}</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')} · {entry.method}</span></div><p>{entry.note || 'Aucune note'}</p></article>)}</section></div></EmployeePage>
 }
 
 function TaxDocumentPanel({ orders }) {
@@ -646,126 +569,44 @@ function RevenuePanel({ staff, orders, cashEntries }) {
   )
 }
 
-function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries, restaurants, promotions, tickerMessages, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, deleteCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, createTickerMessage, updateTickerMessage, deleteTickerMessage, saveSettings }) {
+function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, saveRestaurants, savePromotions, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
-  const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', badge: '', available: true, featured: false }
-  const emptyRestaurant = { name: '', hours: '', phone: '', x: 50, y: 50, active: true }
-  const emptyPromotion = { title: '', offer: '', description: '', active: true }
-  const emptyTicker = { message: '', active: true }
+  const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', available: true, featured: false }
   const [draftStaff, setDraftStaff] = useState(emptyStaff)
   const [draftMenu, setDraftMenu] = useState(emptyMenuItem)
-  const [draftRestaurant, setDraftRestaurant] = useState(emptyRestaurant)
-  const [draftPromotion, setDraftPromotion] = useState(emptyPromotion)
-  const [draftTicker, setDraftTicker] = useState(emptyTicker)
   const [editingMenu, setEditingMenu] = useState(null)
   const [editingStaff, setEditingStaff] = useState(null)
   const [editingCustomer, setEditingCustomer] = useState(null)
-  const [editingRestaurant, setEditingRestaurant] = useState(null)
-  const [editingPromotion, setEditingPromotion] = useState(null)
-  const [editingTicker, setEditingTicker] = useState(null)
   const toggleMenu = item => updateMenuItem(item.id, { available: !item.available })
-  const toggleRestaurant = item => updateRestaurant(item.id, { active: !item.active })
-  const togglePromotion = item => updatePromotion(item.id, { active: !item.active })
-  const toggleTicker = item => updateTickerMessage(item.id, { active: !item.active })
   const addMenu = async event => {
     event.preventDefault()
     await createMenuItem({ ...draftMenu, id: uid('item'), price: Number(draftMenu.price) })
     setDraftMenu(emptyMenuItem)
   }
-  const addRestaurant = async event => {
-    event.preventDefault()
-    await createRestaurant({ ...draftRestaurant, id: uid('restaurant'), x: Number(draftRestaurant.x), y: Number(draftRestaurant.y), active: true })
-    setDraftRestaurant(emptyRestaurant)
-  }
-  const addPromotion = async event => {
-    event.preventDefault()
-    await createPromotion({ ...draftPromotion, id: uid('promo'), active: true })
-    setDraftPromotion(emptyPromotion)
-  }
-  const addTicker = async event => {
-    event.preventDefault()
-    await createTickerMessage({ ...draftTicker, id: uid('ticker'), message: draftTicker.message.trim(), active: true, created_at: new Date().toISOString() })
-    setDraftTicker(emptyTicker)
-  }
   const addStaff = async event => { event.preventDefault(); await createStaff(draftStaff); setDraftStaff(emptyStaff) }
-  const menuAvailable = menu.filter(item => isProductAvailable(item)).length
-  const menuFeatured = menu.filter(item => item.featured).length
-  const menuGroups = categories.map(category => [category, menu.filter(item => item.category === category)]).filter(([, items]) => items.length)
   return (
     <EmployeePage title="Administration" subtitle="Gestion du service et des contenus.">
       {isDemoMode && <div className="shared-warning"><ShieldCheck /><div><strong>Donnees locales</strong><span>Connectez Supabase pour partager automatiquement les comptes et commandes entre tous les utilisateurs.</span></div></div>}
-      <div className="admin-tabs">{[['menu', 'Produits'], ['staff', 'Employes'], ['customers', 'Clients'], ['revenue', 'Chiffre'], ['restaurants', 'Restaurants'], ['promotions', 'Promotions'], ['ticker', 'Bandeau'], ['service', 'Ouverture'], ['taxes', 'Impots']].map(([key, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}>{label}</button>)}</div>
-      {tab === 'menu' && <section className="menu-config-layout">
-        <div className="menu-config-stats">
-          <article><span>Total carte</span><strong>{menu.length}</strong></article>
-          <article><span>Disponibles</span><strong>{menuAvailable}</strong></article>
-          <article><span>Signatures</span><strong>{menuFeatured}</strong></article>
-        </div>
-        <form className="admin-form menu-config-form" onSubmit={addMenu}>
-          <header><div><span>Configuration carte</span><h2>Ajouter un produit ou menu</h2></div><button className="primary"><Plus />Ajouter a la carte</button></header>
-          <div className="form-row"><select value={draftMenu.category} onChange={e => setDraftMenu({ ...draftMenu, category: e.target.value })}>{categories.map(item => <option key={item}>{item}</option>)}</select><input required placeholder="Nom du produit" value={draftMenu.name} onChange={e => setDraftMenu({ ...draftMenu, name: e.target.value })} /></div>
-          <label>Description<textarea required value={draftMenu.description} onChange={e => setDraftMenu({ ...draftMenu, description: e.target.value })} /></label>
-          <label>Image du produit ou menu<input placeholder="URL de l’image, ex. /assets/burger.png" value={draftMenu.imageUrl} onChange={e => setDraftMenu({ ...draftMenu, imageUrl: e.target.value })} /></label>
-          <div className="form-row"><input required min="0" step="0.1" type="number" placeholder="Prix" value={draftMenu.price} onChange={e => setDraftMenu({ ...draftMenu, price: e.target.value })} /><select value={draftMenu.badge} onChange={e => setDraftMenu({ ...draftMenu, badge: e.target.value })}>{badgeOptions.map(item => <option key={item} value={item}>{item || 'Aucun badge'}</option>)}</select></div>
-          <div className="form-row"><label className="check-line"><input type="checkbox" checked={draftMenu.featured} onChange={e => setDraftMenu({ ...draftMenu, featured: e.target.checked })} />Produit signature</label><label className="check-line"><input type="checkbox" checked={draftMenu.available} onChange={e => setDraftMenu({ ...draftMenu, available: e.target.checked })} />Disponible</label></div>
-        </form>
-        <div className="menu-config-board">
-          <header><div><span>Produits disponibles</span><h2>Carte active</h2></div><strong>{menuAvailable}/{menu.length}</strong></header>
-          {menuGroups.map(([category, items]) => <section className="admin-menu-category" key={category}>
-            <div className="admin-category-title"><span>{category}</span></div>
-            <div className="admin-product-grid">{items.map(item => {
-              const image = item.imageUrl || item.image_url
-              const badge = productBadge(item)
-              return <article className={`admin-product-tile ${!isProductAvailable(item) ? 'unavailable' : ''}`} key={item.id}>
-                <div className={image ? 'admin-product-image has-image' : 'admin-product-image'}>{image ? <img src={image} alt={item.name} /> : <Utensils size={30} />}</div>
-                <h3>{item.name}</h3>
-                <p>{item.description || 'Aucune description'}</p>
-                <div className="admin-product-meta"><strong>{money(item.price)}</strong></div>
-                <div className="admin-product-badges"><span>{isProductAvailable(item) ? 'Disponible' : 'Indisponible'}</span>{badge && <span>{badge}</span>}{item.featured && <span>Signature</span>}</div>
-                <footer><label className="switch"><input type="checkbox" checked={item.available} onChange={() => toggleMenu(item)} /><span /></label><button onClick={() => setEditingMenu(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteMenuItem(item.id)}><Trash2 /></button></footer>
-              </article>
-            })}</div>
-          </section>)}
-        </div>
-      </section>}
+      <div className="admin-tabs">{[['menu', 'Produits'], ['staff', 'Employes'], ['customers', 'Clients'], ['revenue', 'Chiffre'], ['restaurants', 'Restaurants'], ['promotions', 'Promotions'], ['service', 'Ouverture'], ['taxes', 'Impots']].map(([key, label]) => <button className={tab === key ? 'active' : ''} key={key} onClick={() => setTab(key)}>{label}</button>)}</div>
+      {tab === 'menu' && <><form className="admin-form" onSubmit={addMenu}><h2>Ajouter un produit ou menu</h2><div className="form-row"><select value={draftMenu.category} onChange={e => setDraftMenu({ ...draftMenu, category: e.target.value })}>{categories.map(item => <option key={item}>{item}</option>)}</select><input required placeholder="Nom du produit" value={draftMenu.name} onChange={e => setDraftMenu({ ...draftMenu, name: e.target.value })} /></div><label>Description<textarea required value={draftMenu.description} onChange={e => setDraftMenu({ ...draftMenu, description: e.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image, ex. /assets/burger.png" value={draftMenu.imageUrl} onChange={e => setDraftMenu({ ...draftMenu, imageUrl: e.target.value })} /></label><div className="form-row"><input required min="0" step="0.1" type="number" placeholder="Prix" value={draftMenu.price} onChange={e => setDraftMenu({ ...draftMenu, price: e.target.value })} /><label className="check-line"><input type="checkbox" checked={draftMenu.featured} onChange={e => setDraftMenu({ ...draftMenu, featured: e.target.checked })} />Produit signature</label></div><button className="primary"><Plus />Ajouter a la carte</button></form><div className="admin-list editable-list">{menu.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.category} · {money(item.price)} · {item.available ? 'Disponible' : 'Indisponible'}{(item.imageUrl || item.image_url) ? ' · Image' : ''}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.available} onChange={() => toggleMenu(item)} /><span /></label><button onClick={() => setEditingMenu(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteMenuItem(item.id)}><Trash2 /></button></div></article>)}</div></>}
       {tab === 'staff' && <><form className="admin-form" onSubmit={addStaff}><h2>Creer un compte employe</h2><div className="form-row"><input required placeholder="Prenom" value={draftStaff.firstName} onChange={e => setDraftStaff({ ...draftStaff, firstName: e.target.value })} /><input required placeholder="Nom" value={draftStaff.lastName} onChange={e => setDraftStaff({ ...draftStaff, lastName: e.target.value })} /></div><div className="form-row"><input required placeholder="Identifiant" value={draftStaff.username} onChange={e => setDraftStaff({ ...draftStaff, username: e.target.value })} /><input required type="email" placeholder="E-mail" value={draftStaff.email} onChange={e => setDraftStaff({ ...draftStaff, email: e.target.value })} /></div><div className="form-row"><input required placeholder="Mot de passe temporaire" value={draftStaff.password} onChange={e => setDraftStaff({ ...draftStaff, password: e.target.value })} /><select value={draftStaff.role} onChange={e => setDraftStaff({ ...draftStaff, role: e.target.value })}>{rankOptions.map(item => <option key={item}>{item}</option>)}</select></div><div className="form-row"><input placeholder="Poste" value={draftStaff.position} onChange={e => setDraftStaff({ ...draftStaff, position: e.target.value })} /><select value={draftStaff.restaurant} onChange={e => setDraftStaff({ ...draftStaff, restaurant: e.target.value })}><option value="">Restaurant</option>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div><div className="form-row"><input placeholder="Telephone" value={draftStaff.phone} onChange={e => setDraftStaff({ ...draftStaff, phone: e.target.value })} /><input placeholder="IBAN" value={draftStaff.iban} onChange={e => setDraftStaff({ ...draftStaff, iban: e.target.value })} /></div><button className="primary"><Plus />Creer le compte</button></form><div className="people-admin-grid">{staff.map(item => <article className="person-admin-card" key={item.id}><header><div className="avatar">{fullName(item).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(item)}</h3><span>{item.role}</span></div></header><dl><div><dt>Poste</dt><dd>{item.position || '-'}</dd></div><div><dt>Restaurant</dt><dd>{item.restaurant || '-'}</dd></div><div><dt>Telephone</dt><dd>{item.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{item.email}</dd></div><div className="full"><dt>IBAN</dt><dd>{item.iban || 'Non renseigne'}</dd></div></dl><footer><button onClick={() => setEditingStaff(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteStaff(item)}><Trash2 /></button></footer></article>)}</div></>}
-      {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const id = customerIdOf(customer); const history = orders.filter(order => order.customerId === id || order.customer_id === id); const points = loyaltyPointsFor(customer, orders, loyaltyEntries); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''} · {points} tampon{points > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div><div><dt>Carte fidelite</dt><dd>{points}/10</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteCustomerMember(customer)}><Trash2 />Supprimer</button></footer></article> })}</div>}
+      {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div className="full"><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
-      {tab === 'restaurants' && <div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button></div></article>)}</div>}
-      {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Creer une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input required placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><button className="primary"><Plus />Publier la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Masquee'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => togglePromotion(item)} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
-      {tab === 'ticker' && <><form className="admin-form" onSubmit={addTicker}><h2>Message du bandeau defilant</h2><label>Message visible sous le menu public<textarea required placeholder="Ex. Livraison Roxwood ouverte jusqu'a 23h." value={draftTicker.message} onChange={e => setDraftTicker({ ...draftTicker, message: e.target.value })} /></label><button className="primary"><Plus />Ajouter au bandeau</button></form><div className="admin-list editable-list">{tickerMessages.map(item => <article key={item.id}><div><strong>{item.message}</strong><span>{item.active ? 'Visible sur le site' : 'Masque'}{item.created_at ? ` · ${new Date(item.created_at).toLocaleDateString('fr-FR')}` : ''}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active !== false} onChange={() => toggleTicker(item)} /><span /></label><button onClick={() => setEditingTicker(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteTickerMessage(item.id)}><Trash2 /></button></div></article>)}</div></>}
+      {tab === 'restaurants' && <div className="admin-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours} · {item.phone}</span></div><label className="switch"><input type="checkbox" checked={item.active} onChange={() => saveRestaurants(restaurants.map(row => row.id === item.id ? { ...row, active: !row.active } : row))} /><span /></label></article>)}</div>}
+      {tab === 'promotions' && <div className="admin-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description}</span></div><label className="switch"><input type="checkbox" checked={item.active} onChange={() => savePromotions(promotions.map(row => row.id === item.id ? { ...row, active: !row.active } : row))} /><span /></label></article>)}</div>}
       {tab === 'service' && <section className={`open-control ${settings.acceptingOrders ? 'is-open' : 'is-closed'}`}><div className="open-indicator"><span /><strong>{settings.acceptingOrders ? 'Restaurant ouvert' : 'Restaurant ferme'}</strong></div><p>Ce bouton autorise ou bloque immediatement les nouvelles commandes.</p><button className={settings.acceptingOrders ? 'close-button' : 'open-button'} onClick={() => saveSettings({ acceptingOrders: !settings.acceptingOrders })}>{settings.acceptingOrders ? 'Fermer le restaurant' : 'Ouvrir le restaurant'}</button></section>}
       {tab === 'taxes' && <TaxDocumentPanel orders={orders} />}
       {editingStaff && <EmployeeEditModal employee={editingStaff} restaurants={restaurants} onClose={() => setEditingStaff(null)} onSave={async values => { await updateStaffMember(editingStaff.id, values); setEditingStaff(null) }} />}
       {editingMenu && <MenuEditModal item={editingMenu} onClose={() => setEditingMenu(null)} onSave={async values => { await updateMenuItem(editingMenu.id, values); setEditingMenu(null) }} />}
-      {editingRestaurant && <RestaurantEditModal restaurant={editingRestaurant} onClose={() => setEditingRestaurant(null)} onSave={async values => { await updateRestaurant(editingRestaurant.id, values); setEditingRestaurant(null) }} />}
-      {editingPromotion && <PromotionEditModal promotion={editingPromotion} onClose={() => setEditingPromotion(null)} onSave={async values => { await updatePromotion(editingPromotion.id, values); setEditingPromotion(null) }} />}
-      {editingTicker && <TickerMessageEditModal ticker={editingTicker} onClose={() => setEditingTicker(null)} onSave={async values => { await updateTickerMessage(editingTicker.id, values); setEditingTicker(null) }} />}
       {editingCustomer && <CustomerEditModal customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSave={async values => { await updateCustomerMember(editingCustomer.id, values); setEditingCustomer(null) }} />}
     </EmployeePage>
   )
 }
 
-function TickerMessageEditModal({ ticker, onClose, onSave }) {
-  const [form, setForm] = useState({ message: ticker.message || '', active: ticker.active !== false })
-  return <Modal title="Modifier le bandeau" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, message: form.message.trim() }) }}><label>Message<textarea required value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Visible sur le site</label><button className="primary"><Save />Enregistrer</button></form></Modal>
-}
-
 function MenuEditModal({ item, onClose, onSave }) {
-  const [form, setForm] = useState({ category: item.category, name: item.name, description: item.description || '', imageUrl: item.imageUrl || item.image_url || '', price: item.price, badge: item.badge || '', available: item.available, featured: item.featured })
-  return <Modal title="Modifier le produit" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, price: Number(form.price) }) }}><label>Categorie<select value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image" value={form.imageUrl} onChange={event => setForm({ ...form, imageUrl: event.target.value })} /></label><label>Prix<input required min="0" step="0.1" type="number" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} /></label><label>Badge<select value={form.badge} onChange={event => setForm({ ...form, badge: event.target.value })}>{badgeOptions.map(badge => <option key={badge} value={badge}>{badge || 'Aucun badge'}</option>)}</select></label><div className="form-row"><label className="check-line"><input type="checkbox" checked={form.available} onChange={event => setForm({ ...form, available: event.target.checked })} />Disponible</label><label className="check-line"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} />Produit signature</label></div><button className="primary"><Save />Enregistrer</button></form></Modal>
-}
-
-function RestaurantEditModal({ restaurant, onClose, onSave }) {
-  const [form, setForm] = useState({ name: restaurant.name || '', hours: restaurant.hours || '', phone: restaurant.phone || '', x: restaurant.x ?? 50, y: restaurant.y ?? 50, active: restaurant.active !== false })
-  const marker = { x: Number(form.x) || 0, y: Number(form.y) || 0 }
-  return <Modal title="Modifier le restaurant" onClose={onClose} wide><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, x: Number(form.x), y: Number(form.y) }) }}><div className="form-row"><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Telephone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label></div><label>Horaires<input value={form.hours} onChange={event => setForm({ ...form, hours: event.target.value })} /></label><div className="form-row"><label>X<input type="number" min="0" max="100" step="0.1" value={form.x} onChange={event => setForm({ ...form, x: event.target.value })} /></label><label>Y<input type="number" min="0" max="100" step="0.1" value={form.y} onChange={event => setForm({ ...form, y: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Visible sur la carte</label></div><SanAndreasMap compact marker={marker} onMarker={point => setForm({ ...form, x: point.x, y: point.y })} /><button className="primary"><Save />Enregistrer</button></form></Modal>
-}
-
-function PromotionEditModal({ promotion, onClose, onSave }) {
-  const [form, setForm] = useState({ title: promotion.title || '', offer: promotion.offer || '', description: promotion.description || '', active: promotion.active !== false })
-  return <Modal title="Modifier la promotion" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><label>Titre<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label><label>Offre<input required value={form.offer} onChange={event => setForm({ ...form, offer: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.active} onChange={event => setForm({ ...form, active: event.target.checked })} />Promotion active</label><button className="primary"><Save />Enregistrer</button></form></Modal>
+  const [form, setForm] = useState({ category: item.category, name: item.name, description: item.description || '', imageUrl: item.imageUrl || item.image_url || '', price: item.price, available: item.available, featured: item.featured })
+  return <Modal title="Modifier le produit" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave({ ...form, price: Number(form.price) }) }}><label>Categorie<select value={form.category} onChange={event => setForm({ ...form, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label><label>Nom<input required value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label><label>Description<textarea required value={form.description} onChange={event => setForm({ ...form, description: event.target.value })} /></label><label>Image du produit ou menu<input placeholder="URL de l’image" value={form.imageUrl} onChange={event => setForm({ ...form, imageUrl: event.target.value })} /></label><div className="form-row"><label>Prix<input required min="0" step="0.1" type="number" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} /></label><label className="check-line"><input type="checkbox" checked={form.available} onChange={event => setForm({ ...form, available: event.target.checked })} />Disponible</label></div><label className="check-line"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} />Produit signature</label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
 function EmployeeEditModal({ employee, restaurants, onClose, onSave }) {
@@ -778,78 +619,12 @@ function CustomerEditModal({ customer, onClose, onSave }) {
   return <Modal title="Modifier le client" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><div className="form-row"><label>Prenom<input value={form.firstName} onChange={event => setForm({ ...form, firstName: event.target.value })} /></label><label>Nom<input value={form.lastName} onChange={event => setForm({ ...form, lastName: event.target.value })} /></label></div><label>E-mail<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label>Telephone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label><label>Adresse<textarea value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
-function SiteIntro({ onFinish }) {
-  return (
-    <section className="site-intro" aria-label="Intro Up-n-Atom">
-      <div className="intro-burst" />
-      <div className="intro-orbit orbit-one" />
-      <div className="intro-orbit orbit-two" />
-      <div className="intro-scanlines" />
-      <div className="intro-stage">
-        <img className="intro-brand" src="/assets/upnatom-brand-transparent.png" alt="Up-n-Atom Hamburgers" />
-        <img className="intro-character" src="/assets/hero-character.png" alt="" aria-hidden="true" />
-        <div className="intro-copy">
-          <span>Atomic launch</span>
-          <strong>Service en ligne</strong>
-        </div>
-      </div>
-      <button className="intro-skip" onClick={onFinish}>Passer</button>
-    </section>
-  )
-}
-
 function PublicFooter({ navigate }) {
-  const year = new Date().getFullYear()
-  return (
-    <footer className="public-footer">
-      <div className="footer-main">
-        <section className="footer-brand-block">
-          <Brand compact />
-          <p>Le comptoir officiel Up-n-Atom de Roxwood : commandes, promotions, recrutement et service client en un seul endroit.</p>
-          <div className="footer-socials">
-            <button onClick={() => navigate('restaurants')} aria-label="Voir le restaurant"><MapPin size={18} /></button>
-            <button onClick={() => navigate('customer-login')} aria-label="Connexion client"><Users size={18} /></button>
-          </div>
-        </section>
-        <section className="footer-column">
-          <h3>Departements</h3>
-          <button onClick={() => navigate('menu')}>La carte</button>
-          <button onClick={() => navigate('promotions')}>Promotions</button>
-          <button onClick={() => navigate('restaurants')}>Restaurant Roxwood</button>
-          <button onClick={() => navigate('recruitment')}>Recrutement</button>
-          <button onClick={() => navigate('customer-login')}>Compte client</button>
-        </section>
-        <section className="footer-column">
-          <h3>Services populaires</h3>
-          <button onClick={() => navigate('menu')}>Commander en ligne</button>
-          <button onClick={() => navigate('menu')}>Voir les menus</button>
-          <button onClick={() => navigate('customer-account')}>Carte fidelite</button>
-          <button onClick={() => navigate('customer-account')}>Suivre une commande</button>
-          <button onClick={() => navigate('recruitment')}>Postuler a Roxwood</button>
-        </section>
-        <section className="footer-contact">
-          <h3>Contact officiel</h3>
-          <div className="footer-contact-line"><Store size={18} /><span>Up-n-Atom Roxwood, San Andreas</span></div>
-          <div className="footer-contact-line"><ShoppingBag size={18} /><span>Commandes, fidelite et espace equipe</span></div>
-          <button className="footer-emergency" onClick={() => navigate('menu')}>Urgence faim : commandez maintenant</button>
-        </section>
-      </div>
-      <div className="footer-bottom">
-        <span>© {year} UP-N-ATOM HAMBURGERS — TOUS DROITS RESERVES</span>
-        <div className="footer-bottom-links">
-          <button>Accessibilite</button>
-          <button>Confidentialite</button>
-          <button>Conditions d'utilisation</button>
-          <button>Plan du site</button>
-        </div>
-      </div>
-    </footer>
-  )
+  return <footer className="public-footer"><Brand compact /><div><strong>Up-n-Atom Hamburgers</strong><p>Los Santos · Blaine County · San Andreas</p></div><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('restaurants')}>Restaurants</button><button onClick={() => navigate('employee-login')}>Espace equipe</button></nav></footer>
 }
 
 export default function App() {
   const [page, setPage] = useState('home')
-  const [showIntro, setShowIntro] = useState(() => sessionStorage.getItem('atom:intro-seen') !== 'true')
   const [user, setUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem('atom:user')) } catch { return null } })
   const [cart, setCart] = useState([])
   const [menu, setMenu] = useState(menuSeed)
@@ -858,42 +633,23 @@ export default function App() {
   const [customers, setCustomers] = useState([])
   const [timeEntries, setTimeEntries] = useState([])
   const [cashEntries, setCashEntries] = useState([])
-  const [loyaltyEntries, setLoyaltyEntries] = useState([])
   const [events, setEvents] = useState([])
   const [orders, setOrders] = useState([])
   const [announcements, setAnnouncements] = useState(announcementsSeed)
   const [documents, setDocuments] = useState(docsSeed)
   const [promotions, setPromotions] = useState(promotionsSeed)
-  const [tickerMessages, setTickerMessages] = useState(tickerMessagesSeed)
   const [applications, setApplications] = useState([])
   const [settings, setSettings] = useState({ acceptingOrders: true })
   const [toast, setToast] = useState('')
-  const finishIntro = () => {
-    sessionStorage.setItem('atom:intro-seen', 'true')
-    setShowIntro(false)
-  }
 
   const refresh = async () => {
     try {
-      const loadTickerMessages = () => loadCollection('ticker_messages').catch(error => {
-        console.warn('ticker_messages unavailable', error)
-        return tickerMessagesSeed
-      })
-      const loadLoyaltyEntries = () => loadCollection('loyalty_entries').catch(error => {
-        console.warn('loyalty_entries unavailable', error)
-        return []
-      })
-      const [m, r, s, e, o, a, d, p, t, h, cash, loyalty, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions'].map(loadCollection), loadTickerMessages(), ...['time_entries', 'cash_entries'].map(loadCollection), loadLoyaltyEntries(), loadCollection('applications'), loadCustomers()])
-      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTickerMessages(t); setTimeEntries(h); setCashEntries(cash); setLoyaltyEntries(loyalty); setApplications(apps); setCustomers(c)
+      const [m, r, s, e, o, a, d, p, h, cash, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions', 'time_entries', 'cash_entries', 'applications'].map(loadCollection), loadCustomers()])
+      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTimeEntries(h); setCashEntries(cash); setApplications(apps); setCustomers(c)
       setSettings(await loadSettings())
     } catch (error) { console.error(error); setToast('Certaines donnees n’ont pas pu etre chargees.') }
   }
   useEffect(() => { refresh() }, [])
-  useEffect(() => {
-    if (!showIntro) return
-    const timer = setTimeout(finishIntro, 3600)
-    return () => clearTimeout(timer)
-  }, [showIntro])
   useEffect(() => {
     const localRefresh = () => refresh()
     window.addEventListener('storage', localRefresh)
@@ -901,7 +657,7 @@ export default function App() {
     if (!supabase) return () => { window.removeEventListener('storage', localRefresh); window.removeEventListener('atom:data', localRefresh) }
 
     const channel = supabase.channel('upnatom-live')
-    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'loyalty_entries', 'applications', 'menu', 'restaurants', 'promotions', 'ticker_messages', 'settings'].forEach(table => {
+    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'applications', 'menu', 'restaurants', 'promotions', 'settings'].forEach(table => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, localRefresh)
     })
     channel.subscribe()
@@ -916,15 +672,7 @@ export default function App() {
   const login = async (identifier, password, portal) => {
     const account = await signIn(identifier, password, portal); setUser(account); sessionStorage.setItem('atom:user', JSON.stringify(account)); navigate(portal === 'employee' ? 'employee-dashboard' : 'account')
   }
-  const register = async form => {
-    const account = await signUpCustomer(form)
-    setUser(account)
-    if (supabase) setCustomers(await loadCustomers())
-    else setCustomers(current => [account, ...current])
-    sessionStorage.setItem('atom:user', JSON.stringify(account))
-    navigate('account')
-    setToast('Votre compte client est pret.')
-  }
+  const register = async form => { const account = await signUpCustomer(form); setUser(account); setCustomers(current => [account, ...current]); sessionStorage.setItem('atom:user', JSON.stringify(account)); navigate('account'); setToast('Votre compte client est pret.') }
   const logout = async () => { await signOut(); setUser(null); sessionStorage.removeItem('atom:user'); navigate('home') }
   const placeOrder = async form => {
     await insertRecord('orders', form)
@@ -941,20 +689,11 @@ export default function App() {
   const updateApplication = async (id, patch) => { await updateRecord('applications', id, patch); setApplications(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Candidature mise a jour.') }
   const submitHours = async form => { await insertRecord('time_entries', form); setTimeEntries(current => [form, ...current]); setToast('Heures enregistrees.') }
   const submitCash = async form => { await insertRecord('cash_entries', form); setCashEntries(current => [form, ...current]); setToast('Encaissement enregistre.') }
-  const submitLoyalty = async form => { const saved = await insertRecord('loyalty_entries', form); setLoyaltyEntries(current => [saved, ...current]); setToast('Carte fidelite mise a jour.') }
+  const saveLocalList = (collection, setter) => async value => { await replaceCollection(collection, value); setter(value); setToast('Modifications enregistrees.') }
   const saveSettings = async value => { await updateSettings(value); setSettings(value); setToast('Etat du service mis a jour.') }
   const createMenuItem = async form => { await insertRecord('menu', form); setMenu(current => [form, ...current]); setToast('Produit ajoute a la carte.') }
   const updateMenuItem = async (id, patch) => { await updateRecord('menu', id, patch); setMenu(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Produit mis a jour.') }
   const deleteMenuItem = async id => { await deleteRecord('menu', id); setMenu(current => current.filter(item => item.id !== id)); setToast('Produit supprime.') }
-  const createRestaurant = async form => { const saved = await insertRecord('restaurants', form); setRestaurants(current => [saved, ...current]); setToast('Restaurant ajoute a la carte.') }
-  const updateRestaurant = async (id, patch) => { const saved = await updateRecord('restaurants', id, patch); setRestaurants(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Restaurant mis a jour.') }
-  const deleteRestaurant = async id => { await deleteRecord('restaurants', id); setRestaurants(current => current.filter(item => item.id !== id)); setToast('Restaurant supprime.') }
-  const createPromotion = async form => { const saved = await insertRecord('promotions', form); setPromotions(current => [saved, ...current]); setToast('Promotion publiee.') }
-  const updatePromotion = async (id, patch) => { const saved = await updateRecord('promotions', id, patch); setPromotions(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Promotion mise a jour.') }
-  const deletePromotion = async id => { await deleteRecord('promotions', id); setPromotions(current => current.filter(item => item.id !== id)); setToast('Promotion supprimee.') }
-  const createTickerMessage = async form => { const saved = await insertRecord('ticker_messages', form); setTickerMessages(current => [saved, ...current]); setToast('Message ajoute au bandeau.') }
-  const updateTickerMessage = async (id, patch) => { const saved = await updateRecord('ticker_messages', id, patch); setTickerMessages(current => current.map(item => item.id === id ? { ...item, ...saved } : item)); setToast('Message du bandeau mis a jour.') }
-  const deleteTickerMessage = async id => { await deleteRecord('ticker_messages', id); setTickerMessages(current => current.filter(item => item.id !== id)); setToast('Message du bandeau supprime.') }
   const createStaff = async form => { const employee = await createEmployee(form); setStaff(current => [...current, employee]); setToast('Compte employe cree.') }
   const updateStaffMember = async (id, patch) => {
     const currentStaff = staff.find(item => item.id === id) || {}
@@ -963,11 +702,9 @@ export default function App() {
   }
   const deleteStaff = async employee => { await removeEmployee(employee); setStaff(current => current.filter(item => item.id !== employee.id)); setToast('Compte employe supprime.') }
   const updateCustomerMember = async (id, patch) => { await updateCustomer(id, patch); setCustomers(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Fiche client mise a jour.') }
-  const deleteCustomerMember = async customer => { await removeCustomer(customer); setCustomers(current => current.filter(item => item.id !== customer.id)); setToast('Compte client supprime.') }
-  const intro = showIntro ? <SiteIntro onFinish={finishIntro} /> : null
 
   const employeePage = page.startsWith('employee-') && !['employee-login'].includes(page)
-  if (employeePage && user?.roleType !== 'employee') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
+  if (employeePage && user?.roleType !== 'employee') return <AuthPage portal="employee" onLogin={login} navigate={navigate} />
   if (employeePage && user?.roleType === 'employee') {
     let content = <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     if (page === 'employee-orders') content = <EmployeeOrders orders={orders} staff={staff} onUpdate={updateOrder} />
@@ -976,20 +713,20 @@ export default function App() {
     if (page === 'employee-documents') content = <DocumentsPage documents={documents} />
     if (page === 'employee-announcements') content = <AnnouncementsPage announcements={announcements} canCreate={canManage(user)} onCreate={createAnnouncement} />
     if (page === 'employee-clock') content = <ClockPage user={user} entries={timeEntries} onSubmit={submitHours} />
-    if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} customers={customers} onSubmit={submitCash} onSubmitLoyalty={submitLoyalty} />
+    if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} onSubmit={submitCash} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} loyaltyEntries={loyaltyEntries} restaurants={restaurants} promotions={promotions} tickerMessages={tickerMessages} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} deleteCustomerMember={deleteCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} createTickerMessage={createTickerMessage} updateTickerMessage={updateTickerMessage} deleteTickerMessage={deleteTickerMessage} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    return <>{intro}<EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} saveRestaurants={saveLocalList('restaurants', setRestaurants)} savePromotions={saveLocalList('promotions', setPromotions)} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
+    return <><EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
-  if (page === 'customer-login') return <>{intro}<AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} /></>
-  if (page === 'employee-login') return <>{intro}<AuthPage portal="employee" onLogin={login} navigate={navigate} /></>
+  if (page === 'customer-login') return <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
+  if (page === 'employee-login') return <AuthPage portal="employee" onLogin={login} navigate={navigate} />
 
-  let content = <Home navigate={navigate} promotions={promotions} menu={menu} />
+  let content = <Home navigate={navigate} promotions={promotions} />
   if (page === 'menu') content = <MenuPage menu={menu} cart={cart} setCart={setCart} user={user?.roleType === 'customer' ? user : null} navigate={navigate} settings={settings} placeOrder={placeOrder} />
   if (page === 'promos') content = <PromosPage promotions={promotions} />
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />
   if (page === 'recruitment') content = <Recruitment restaurants={restaurants} onSubmitApplication={submitApplication} />
-  if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} loyaltyEntries={loyaltyEntries} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
-  return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} tickerMessages={tickerMessages} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
+  if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
+  return <><PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
 }
