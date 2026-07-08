@@ -16,28 +16,26 @@ import {
 } from './store'
 
 const MAP_URL = 'https://www.igta5.com/images/gtav-map-atlas-huge.jpg'
+const normalizeRoleSafe = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’']/g, '').toLowerCase().trim()
 const categories = ['Menus', 'Burgers', 'Accompagnements', 'Boissons', 'Desserts']
 const badgeOptions = ['', 'Nouveau', 'Populaire', 'Edition limitee']
-const applicationRoleOptions = rankOptions.slice(rankOptions.indexOf('Equipier Formateur') + 1)
+const DELIVERY_ZONES = [
+  { id: 'roxwood', label: 'Roxwood', fee: 50 },
+  { id: 'sandy-shores', label: 'Sandy Shores', fee: 50 },
+  { id: 'los-santos', label: 'Los Santos', fee: 100 },
+]
+const trainerIndex = rankOptions.findIndex(rank => normalizeRoleSafe(rank) === 'equipier formateur')
+const recruitmentRankOptions = trainerIndex >= 0 ? rankOptions.slice(trainerIndex + 1) : rankOptions.filter(rank => !['directeur restaurant', 'assistant directeur', 'chef d equipe', 'manager', 'equipier formateur'].includes(normalizeRoleSafe(rank)))
 
 const money = value => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(value)
 const fullName = user => `${user?.firstName || user?.first_name || ''} ${user?.lastName || user?.last_name || ''}`.trim()
 const uid = prefix => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
 const isProductAvailable = product => product?.available !== false
 const productBadge = product => !isProductAvailable(product) ? 'Indisponible' : product?.badge || (product?.featured ? 'Populaire' : '')
-const normalizeRole = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f']/g, '').replace(/[’']/g, '').toLowerCase().trim()
+const normalizeRole = normalizeRoleSafe
 const managerRoles = ['Directeur Restaurant', 'Assistant Directeur', 'Chef d equipe', 'Chef d’équipe', 'Manager'].map(normalizeRole)
 const isManagerRole = role => managerRoles.includes(normalizeRole(role))
 const canManage = user => isManagerRole(user?.role) || user?.permissions?.includes('admin')
-const customerIdOf = customer => customer?.id || customer?.auth_id
-const loyaltyPointsFor = (customer, orders = [], loyaltyEntries = []) => {
-  const id = customerIdOf(customer)
-  const paidOrders = orders.filter(order => (order.customerId === id || order.customer_id === id) && Boolean(order.paid) && order.status !== 'Annulee').length
-  const manualPoints = loyaltyEntries
-    .filter(entry => entry.customerId === id || entry.customer_id === id)
-    .reduce((sum, entry) => sum + Number(entry.points || 0), 0)
-  return paidOrders + manualPoints
-}
 
 function Brand({ compact = false }) {
   return <img className={compact ? 'brand compact' : 'brand'} src="/assets/upnatom-brand-transparent.png" alt="Up-n-Atom Hamburgers" />
@@ -256,15 +254,19 @@ function SanAndreasMap({ marker, onMarker, restaurantMarkers = false, restaurant
 }
 
 function CheckoutModal({ user, cart, total, onClose, onSubmit }) {
-  const [form, setForm] = useState({ firstName: user.firstName || user.first_name || '', lastName: user.lastName || user.last_name || '', phone: user.phone || '', address: user.address || '', note: '', marker: null })
+  const [form, setForm] = useState({ firstName: user.firstName || user.first_name || '', lastName: user.lastName || user.last_name || '', phone: user.phone || '', address: user.address || '', note: '', marker: null, deliveryZone: 'roxwood' })
   const [error, setError] = useState('')
+  const selectedZone = DELIVERY_ZONES.find(zone => zone.id === form.deliveryZone) || DELIVERY_ZONES[0]
+  const deliveryFee = selectedZone.fee
+  const grandTotal = total + deliveryFee
   const submit = async event => {
     event.preventDefault()
     if (!form.firstName || !form.lastName || !form.phone || !form.address || !form.marker) return setError('Completez les coordonnees et placez la destination sur la carte.')
     await onSubmit({
       id: `ATM-${String(Date.now()).slice(-6)}`, customerId: user.id, customerName: `${form.firstName} ${form.lastName}`, phone: form.phone,
       address: form.address, markerX: form.marker.x, markerY: form.marker.y, note: form.note, status: 'Nouvelle', paid: false, assignedTo: '', createdAt: new Date().toISOString(),
-      items: cart.map(({ id, name, price, quantity }) => ({ id, name, price, quantity })), total,
+      deliveryZone: selectedZone.label, deliveryFee, loyaltyAwarded: false,
+      items: cart.map(({ id, name, price, quantity }) => ({ id, name, price, quantity })), total: grandTotal,
     })
   }
   return (
@@ -273,9 +275,10 @@ function CheckoutModal({ user, cart, total, onClose, onSubmit }) {
         <div className="checkout-fields">
           <div className="form-row"><label>Nom<input value={form.lastName} onChange={e => setForm({ ...form, lastName: e.target.value })} /></label><label>Prenom<input value={form.firstName} onChange={e => setForm({ ...form, firstName: e.target.value })} /></label></div>
           <label>Telephone<input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></label>
+          <label>Zone de livraison<select value={form.deliveryZone} onChange={e => setForm({ ...form, deliveryZone: e.target.value })}>{DELIVERY_ZONES.map(zone => <option value={zone.id} key={zone.id}>{zone.label} — {money(zone.fee)}</option>)}</select></label>
           <label>Adresse ou indication precise<input placeholder="Ex. Alta Street, parking rouge" value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} /></label>
           <label>Instruction de livraison<textarea placeholder="Facultatif" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} /></label>
-          <div className="checkout-summary"><span>{cart.reduce((sum, item) => sum + item.quantity, 0)} articles</span><strong>{money(total)}</strong></div>
+          <div className="checkout-total-box"><div><span>Sous-total · {cart.reduce((sum, item) => sum + item.quantity, 0)} articles</span><strong>{money(total)}</strong></div><div><span>Frais de livraison · {selectedZone.label}</span><strong>{money(deliveryFee)}</strong></div><div className="grand-total"><span>Total</span><strong>{money(grandTotal)}</strong></div></div>
           {error && <p className="form-error">{error}</p>}
           <button className="primary full">Envoyer la commande</button>
         </div>
@@ -310,7 +313,7 @@ function Recruitment({ restaurants, onSubmitApplication }) {
   const [form, setForm] = useState({
     fullName: '',
     phone: '',
-    role: applicationRoleOptions[0],
+    role: recruitmentRankOptions[0] || 'Equipier polyvalent',
     restaurant: selectedRestaurant,
     message: '',
   })
@@ -328,7 +331,7 @@ function Recruitment({ restaurants, onSubmitApplication }) {
         status: 'Nouvelle',
         createdAt: new Date().toISOString(),
       })
-      setForm({ fullName: '', phone: '', role: applicationRoleOptions[0], restaurant: selectedRestaurant, message: '' })
+      setForm({ fullName: '', phone: '', role: recruitmentRankOptions[0] || 'Equipier polyvalent', restaurant: selectedRestaurant, message: '' })
       setSent(true)
     } catch (err) {
       setError(err.message || 'Impossible d’envoyer la candidature.')
@@ -336,11 +339,11 @@ function Recruitment({ restaurants, onSubmitApplication }) {
   }
   return (
     <main className="content-section page-top">
-      <div className="section-heading"><span>Recrutement</span><h1>Rejoignez l’equipe</h1><p>Les candidatures sont ouvertes uniquement pour les postes d’entree. Les postes Equipier Formateur et superieurs sont accessibles par promotion interne.</p></div>
-      <div className="rank-grid">{applicationRoleOptions.map(rank => <article key={rank}><BriefcaseBusiness /><h3>{rank}</h3></article>)}</div>
+      <div className="section-heading"><span>Recrutement</span><h1>Rejoignez l’equipe</h1><p>Les candidatures sont actuellement ouvertes uniquement pour le restaurant de Roxwood.</p></div>
+      <div className="rank-grid">{recruitmentRankOptions.map(rank => <article key={rank}><BriefcaseBusiness /><h3>{rank}</h3></article>)}</div>
       <form className="application-form" onSubmit={submit}>
         <h2>Candidature</h2><div className="form-row"><input required placeholder="Nom et prenom" value={form.fullName} onChange={event => setForm({ ...form, fullName: event.target.value })} /><input required placeholder="Telephone" value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></div>
-        <div className="form-row"><select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>{applicationRoleOptions.map(rank => <option key={rank}>{rank}</option>)}</select><select value={form.restaurant} onChange={event => setForm({ ...form, restaurant: event.target.value })}>{hiringRestaurants.length ? hiringRestaurants.map(item => <option key={item.id}>{item.name}</option>) : <option>{selectedRestaurant}</option>}</select></div>
+        <div className="form-row"><select value={form.role} onChange={event => setForm({ ...form, role: event.target.value })}>{recruitmentRankOptions.map(rank => <option key={rank}>{rank}</option>)}</select><select value={form.restaurant} onChange={event => setForm({ ...form, restaurant: event.target.value })}>{hiringRestaurants.length ? hiringRestaurants.map(item => <option key={item.id}>{item.name}</option>) : <option>{selectedRestaurant}</option>}</select></div>
         <textarea required placeholder="Votre motivation et vos disponibilites" value={form.message} onChange={event => setForm({ ...form, message: event.target.value })} /><button className="primary">Envoyer la candidature</button>{sent && <p className="success-text">Candidature enregistree.</p>}{error && <p className="form-error">{error}</p>}
       </form>
     </main>
@@ -376,37 +379,17 @@ function AuthPage({ portal, onLogin, onRegister, navigate }) {
   )
 }
 
-function LoyaltyCard({ points }) {
-  const rewards = Math.floor(points / 10)
-  const active = points > 0 ? points % 10 || 10 : 0
-  const remaining = points > 0 && points % 10 === 0 ? 0 : 10 - active
-  return (
-    <section className="loyalty-panel">
-      <div>
-        <StarLoyalty />
-        <span>Carte fidelite Atom Club</span>
-        <h2>{points} tampon{points > 1 ? 's' : ''}</h2>
-        <p>{rewards > 0 ? `${rewards} avantage${rewards > 1 ? 's' : ''} debloque${rewards > 1 ? 's' : ''}.` : `${remaining} tampon${remaining > 1 ? 's' : ''} avant la prochaine recompense.`}</p>
-      </div>
-      <div className="stamp-grid">{Array.from({ length: 10 }).map((_, index) => <span className={index < active ? 'active' : ''} key={index}>A</span>)}</div>
-    </section>
-  )
-}
-
-function StarLoyalty() {
-  return <div className="loyalty-mark">A</div>
-}
-
-function CustomerAccount({ user, orders, loyaltyEntries, navigate }) {
+function CustomerAccount({ user, orders, navigate }) {
   const own = orders.filter(order => order.customerId === user.id || order.customer_id === user.id)
-  const loyaltyPoints = loyaltyPointsFor(user, orders, loyaltyEntries)
-  const manualEntries = loyaltyEntries.filter(entry => entry.customerId === user.id || entry.customer_id === user.id)
+  const points = Number(user.loyaltyPoints ?? user.loyalty_points ?? 0)
+  const rewardStep = 100
+  const progress = points % rewardStep
+  const nextReward = rewardStep - progress
   return (
     <main className="content-section page-top">
       <div className="account-heading"><div><span>Compte client</span><h1>Bonjour {user.firstName || user.first_name}</h1></div><button className="primary" onClick={() => navigate('menu')}><ShoppingBag />Nouvelle commande</button></div>
-      <LoyaltyCard points={loyaltyPoints} />
-      {!!manualEntries.length && <section className="loyalty-history"><h2>Ajouts manuels</h2>{manualEntries.slice(0, 5).map(entry => <article key={entry.id}><strong>+{entry.points} tampon{Number(entry.points) > 1 ? 's' : ''}</strong><span>{entry.reason || 'Paiement caisse'} · {new Date(entry.createdAt || entry.created_at || Date.now()).toLocaleDateString('fr-FR')}</span></article>)}</section>}
-      <div className="order-history">{!own.length && <div className="empty-card"><PackageCheck /><h2>Aucune commande</h2><p>Vos prochaines commandes apparaitront ici.</p></div>}{own.map(order => <article className="history-card" key={order.id}><header><strong>{order.id}</strong><div className="badge-row"><StatusBadge status={order.status} /><PaymentBadge paid={Boolean(order.paid)} /></div></header><p>{new Date(order.createdAt || order.created_at).toLocaleString('fr-FR')}</p><div>{order.items.map(item => <span key={item.id}>{item.quantity} x {item.name}</span>)}</div><footer><span>{order.address}</span><strong>{money(order.total)}</strong></footer><OrderProgress status={order.status} /></article>)}</div>
+      <section className="loyalty-card"><div><span>Carte fidélité Atom Club</span><strong>{points} points</strong><p>{nextReward === rewardStep ? 'Votre prochaine récompense commence ici.' : `Encore ${nextReward} points avant la prochaine récompense.`}</p></div><div className="loyalty-progress"><span style={{ width: `${progress}%` }} /></div><small>1 $ dépensé sur une commande payée = 1 point.</small></section>
+      <div className="order-history">{!own.length && <div className="empty-card"><PackageCheck /><h2>Aucune commande</h2><p>Vos prochaines commandes apparaitront ici.</p></div>}{own.map(order => <article className="history-card" key={order.id}><header><strong>{order.id}</strong><div className="badge-row"><StatusBadge status={order.status} /><PaymentBadge paid={Boolean(order.paid)} /></div></header><p>{new Date(order.createdAt || order.created_at).toLocaleString('fr-FR')}</p><div>{order.items.map(item => <span key={item.id}>{item.quantity} x {item.name}</span>)}{Number(order.deliveryFee ?? order.delivery_fee ?? 0) > 0 && <span>Livraison · {order.deliveryZone || order.delivery_zone} : {money(order.deliveryFee ?? order.delivery_fee)}</span>}</div><footer><span>{order.address}</span><strong>{money(order.total)}</strong></footer><OrderProgress status={order.status} /></article>)}</div>
     </main>
   )
 }
@@ -483,7 +466,7 @@ function OrderDetail({ order, staff, onUpdate }) {
       <div className="detail-grid"><div><small>Client</small><strong>{order.customerName || order.customer_name}</strong></div><div><small>Telephone</small><strong>{order.phone}</strong></div></div>
       <div className="address-box"><MapPin /><div><small>Destination</small><strong>{order.address}</strong>{order.note && <span>{order.note}</span>}</div></div>
       <SanAndreasMap compact marker={{ x: order.markerX ?? order.marker_x, y: order.markerY ?? order.marker_y }} />
-      <div className="order-items">{order.items.map(item => <div key={item.id}><span>{item.quantity} x {item.name}</span><strong>{money(item.price * item.quantity)}</strong></div>)}<footer><span>Total</span><strong>{money(order.total)}</strong></footer></div>
+      <div className="order-items">{order.items.map(item => <div key={item.id}><span>{item.quantity} x {item.name}</span><strong>{money(item.price * item.quantity)}</strong></div>)}{Number(order.deliveryFee ?? order.delivery_fee ?? 0) > 0 && <div><span>Frais de livraison · {order.deliveryZone || order.delivery_zone}</span><strong>{money(order.deliveryFee ?? order.delivery_fee)}</strong></div>}<footer><span>Total</span><strong>{money(order.total)}</strong></footer></div>
       <div className="form-row"><label>Statut<select value={order.status} onChange={e => onUpdate(order.id, { status: e.target.value })}>{orderStatuses.map(item => <option key={item}>{item}</option>)}</select></label><label>Paiement<select value={order.paid ? 'paid' : 'unpaid'} onChange={e => onUpdate(order.id, { paid: e.target.value === 'paid' })}><option value="unpaid">Non payee</option><option value="paid">Payee</option></select></label><label>Attribuee a<select value={order.assignedTo || order.assigned_to || ''} onChange={e => onUpdate(order.id, { assignedTo: e.target.value })}><option value="">Non attribuee</option>{staff.map(member => <option value={member.id} key={member.id}>{fullName(member)}</option>)}</select></label></div>
     </section>
   )
@@ -567,32 +550,18 @@ function ClockPage({ user, entries, onSubmit }) {
   return <EmployeePage title="Mes heures" subtitle="Declare simplement le nombre d’heures effectuees."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Clock3 /><h2>Nouvelle declaration</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Nombre d’heures<input required min="0.25" max="24" step="0.25" type="number" placeholder="Ex. 7.5" value={form.hours} onChange={event => setForm({ ...form, hours: event.target.value })} /></label><label>Commentaire<textarea placeholder="Facultatif" value={form.comment} onChange={event => setForm({ ...form, comment: event.target.value })} /></label><button className="primary"><Save />Enregistrer mes heures</button></form><section className="hours-history"><h2>Mes dernieres declarations</h2>{!ownEntries.length && <p>Aucune heure declaree.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{Number(entry.hours).toLocaleString('fr-FR')} h</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')}</span></div><p>{entry.comment || 'Aucun commentaire'}</p></article>)}</section></div></EmployeePage>
 }
 
-function CashPage({ user, entries, customers, onSubmit, onSubmitLoyalty }) {
-  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', customerId: '', loyaltyPoints: '0', note: '' })
+function CashPage({ user, entries, customers, onSubmit, onAddLoyalty }) {
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', note: '', customerId: '', loyaltyPoints: '' })
   const ownEntries = entries.filter(entry => entry.employeeId === user.id || entry.employee_id === user.id)
   const submit = async event => {
     event.preventDefault()
-    const cashEntry = { id: uid('cash'), employeeId: user.id, employeeName: fullName(user), date: form.date, amount: Number(form.amount), method: form.method, note: form.note, createdAt: new Date().toISOString() }
-    await onSubmit(cashEntry)
-    const selectedCustomer = customers.find(customer => customerIdOf(customer) === form.customerId)
-    const points = Number(form.loyaltyPoints || 0)
-    if (selectedCustomer && points > 0) {
-      await onSubmitLoyalty({
-        id: uid('loyalty'),
-        customerId: customerIdOf(selectedCustomer),
-        customerName: fullName(selectedCustomer),
-        employeeId: user.id,
-        employeeName: fullName(user),
-        cashEntryId: cashEntry.id,
-        points,
-        amount: Number(form.amount),
-        reason: 'Paiement caisse',
-        createdAt: new Date().toISOString(),
-      })
-    }
-    setForm({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', customerId: '', loyaltyPoints: '0', note: '' })
+    const selectedCustomer = customers.find(customer => customer.id === form.customerId)
+    const points = Math.max(0, Number(form.loyaltyPoints) || 0)
+    await onSubmit({ id: uid('cash'), employeeId: user.id, employeeName: fullName(user), date: form.date, amount: Number(form.amount), method: form.method, note: form.note, customerId: form.customerId || null, customerName: selectedCustomer ? fullName(selectedCustomer) : '', loyaltyPoints: points, createdAt: new Date().toISOString() })
+    if (selectedCustomer && points > 0) await onAddLoyalty(selectedCustomer.id, points)
+    setForm({ date: new Date().toISOString().slice(0, 10), amount: '', method: 'Especes', note: '', customerId: '', loyaltyPoints: '' })
   }
-  return <EmployeePage title="Compta" subtitle="Declare les encaissements faits hors commande du site."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Banknote /><h2>Nouvel encaissement</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Montant<input required min="0.01" step="0.01" type="number" placeholder="Ex. 250" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} /></label><label>Moyen de paiement<select value={form.method} onChange={event => setForm({ ...form, method: event.target.value })}><option>Especes</option><option>Carte</option><option>Virement</option><option>Autre</option></select></label><label>Client fidelite<select value={form.customerId} onChange={event => setForm({ ...form, customerId: event.target.value, loyaltyPoints: event.target.value ? '1' : '0' })}><option value="">Aucun client</option>{customers.map(customer => <option value={customerIdOf(customer)} key={customerIdOf(customer)}>{fullName(customer) || customer.email}</option>)}</select></label><label>Tampons a ajouter<input min="0" max="20" step="1" type="number" value={form.loyaltyPoints} onChange={event => setForm({ ...form, loyaltyPoints: event.target.value })} /></label><label>Note<textarea placeholder="Ex. vente comptoir, evenement, livraison directe..." value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} /></label><button className="primary"><Save />Enregistrer l’encaissement</button></form><section className="hours-history"><h2>Mes derniers encaissements</h2>{!ownEntries.length && <p>Aucun encaissement declare.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{money(entry.amount)}</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')} · {entry.method}</span></div><p>{entry.note || 'Aucune note'}</p></article>)}</section></div></EmployeePage>
+  return <EmployeePage title="Compta" subtitle="Declare les encaissements faits hors commande du site."><div className="hours-layout"><form className="hours-form" onSubmit={submit}><Banknote /><h2>Nouvel encaissement</h2><label>Date<input required type="date" value={form.date} onChange={event => setForm({ ...form, date: event.target.value })} /></label><label>Montant<input required min="0.01" step="0.01" type="number" placeholder="Ex. 250" value={form.amount} onChange={event => setForm({ ...form, amount: event.target.value })} /></label><label>Moyen de paiement<select value={form.method} onChange={event => setForm({ ...form, method: event.target.value })}><option>Especes</option><option>Carte</option><option>Virement</option><option>Autre</option></select></label><label>Compte fidelite (facultatif)<select value={form.customerId} onChange={event => setForm({ ...form, customerId: event.target.value })}><option value="">Aucun compte client</option>{customers.map(customer => <option key={customer.id} value={customer.id}>{fullName(customer)} · {customer.email}</option>)}</select></label>{form.customerId && <label>Points a ajouter<input min="0" step="1" type="number" placeholder="Ex. 25" value={form.loyaltyPoints} onChange={event => setForm({ ...form, loyaltyPoints: event.target.value })} /></label>}<label>Note<textarea placeholder="Ex. vente comptoir, evenement, livraison directe..." value={form.note} onChange={event => setForm({ ...form, note: event.target.value })} /></label><button className="primary"><Save />Enregistrer l’encaissement</button></form><section className="hours-history"><h2>Mes derniers encaissements</h2>{!ownEntries.length && <p>Aucun encaissement declare.</p>}{ownEntries.slice(0, 12).map(entry => <article key={entry.id}><div><strong>{money(entry.amount)}</strong><span>{new Date(`${entry.date}T12:00`).toLocaleDateString('fr-FR')} · {entry.method}</span></div><p>{entry.note || 'Aucune note'}{Number(entry.loyaltyPoints ?? entry.loyalty_points ?? 0) > 0 ? ` · +${entry.loyaltyPoints ?? entry.loyalty_points} points` : ''}</p></article>)}</section></div></EmployeePage>
 }
 
 function TaxDocumentPanel({ orders }) {
@@ -646,7 +615,7 @@ function RevenuePanel({ staff, orders, cashEntries }) {
   )
 }
 
-function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries, restaurants, promotions, tickerMessages, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, deleteCustomerMember, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, createTickerMessage, updateTickerMessage, deleteTickerMessage, saveSettings }) {
+function AdminPage({ menu, staff, customers, orders, cashEntries, restaurants, promotions, tickerMessages, settings, createMenuItem, updateMenuItem, deleteMenuItem, createStaff, updateStaffMember, deleteStaff, updateCustomerMember, deleteCustomerMember, adjustCustomerLoyalty, createRestaurant, updateRestaurant, deleteRestaurant, createPromotion, updatePromotion, deletePromotion, createTickerMessage, updateTickerMessage, deleteTickerMessage, saveSettings }) {
   const [tab, setTab] = useState('menu')
   const emptyStaff = { firstName: '', lastName: '', username: '', email: '', password: '', role: 'Equipier polyvalent', position: '', restaurant: '', phone: '', iban: '' }
   const emptyMenuItem = { category: 'Menus', name: '', description: '', price: '', imageUrl: '', badge: '', available: true, featured: false }
@@ -661,6 +630,7 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries
   const [editingMenu, setEditingMenu] = useState(null)
   const [editingStaff, setEditingStaff] = useState(null)
   const [editingCustomer, setEditingCustomer] = useState(null)
+  const [editingLoyalty, setEditingLoyalty] = useState(null)
   const [editingRestaurant, setEditingRestaurant] = useState(null)
   const [editingPromotion, setEditingPromotion] = useState(null)
   const [editingTicker, setEditingTicker] = useState(null)
@@ -730,7 +700,7 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries
         </div>
       </section>}
       {tab === 'staff' && <><form className="admin-form" onSubmit={addStaff}><h2>Creer un compte employe</h2><div className="form-row"><input required placeholder="Prenom" value={draftStaff.firstName} onChange={e => setDraftStaff({ ...draftStaff, firstName: e.target.value })} /><input required placeholder="Nom" value={draftStaff.lastName} onChange={e => setDraftStaff({ ...draftStaff, lastName: e.target.value })} /></div><div className="form-row"><input required placeholder="Identifiant" value={draftStaff.username} onChange={e => setDraftStaff({ ...draftStaff, username: e.target.value })} /><input required type="email" placeholder="E-mail" value={draftStaff.email} onChange={e => setDraftStaff({ ...draftStaff, email: e.target.value })} /></div><div className="form-row"><input required placeholder="Mot de passe temporaire" value={draftStaff.password} onChange={e => setDraftStaff({ ...draftStaff, password: e.target.value })} /><select value={draftStaff.role} onChange={e => setDraftStaff({ ...draftStaff, role: e.target.value })}>{rankOptions.map(item => <option key={item}>{item}</option>)}</select></div><div className="form-row"><input placeholder="Poste" value={draftStaff.position} onChange={e => setDraftStaff({ ...draftStaff, position: e.target.value })} /><select value={draftStaff.restaurant} onChange={e => setDraftStaff({ ...draftStaff, restaurant: e.target.value })}><option value="">Restaurant</option>{restaurants.map(item => <option key={item.id}>{item.name}</option>)}</select></div><div className="form-row"><input placeholder="Telephone" value={draftStaff.phone} onChange={e => setDraftStaff({ ...draftStaff, phone: e.target.value })} /><input placeholder="IBAN" value={draftStaff.iban} onChange={e => setDraftStaff({ ...draftStaff, iban: e.target.value })} /></div><button className="primary"><Plus />Creer le compte</button></form><div className="people-admin-grid">{staff.map(item => <article className="person-admin-card" key={item.id}><header><div className="avatar">{fullName(item).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(item)}</h3><span>{item.role}</span></div></header><dl><div><dt>Poste</dt><dd>{item.position || '-'}</dd></div><div><dt>Restaurant</dt><dd>{item.restaurant || '-'}</dd></div><div><dt>Telephone</dt><dd>{item.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{item.email}</dd></div><div className="full"><dt>IBAN</dt><dd>{item.iban || 'Non renseigne'}</dd></div></dl><footer><button onClick={() => setEditingStaff(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteStaff(item)}><Trash2 /></button></footer></article>)}</div></>}
-      {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const id = customerIdOf(customer); const history = orders.filter(order => order.customerId === id || order.customer_id === id); const points = loyaltyPointsFor(customer, orders, loyaltyEntries); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''} · {points} tampon{points > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div><div><dt>Carte fidelite</dt><dd>{points}/10</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deleteCustomerMember(customer)}><Trash2 />Supprimer</button></footer></article> })}</div>}
+      {tab === 'customers' && <div className="people-admin-grid">{customers.map(customer => { const history = orders.filter(order => order.customerId === customer.id || order.customer_id === customer.id); const points = Number(customer.loyaltyPoints ?? customer.loyalty_points ?? 0); return <article className="person-admin-card customer" key={customer.id}><header><div className="avatar">{fullName(customer).split(' ').map(part => part[0]).join('')}</div><div><h3>{fullName(customer)}</h3><span>{history.length} commande{history.length > 1 ? 's' : ''}</span></div></header><dl><div><dt>Telephone</dt><dd>{customer.phone || '-'}</dd></div><div><dt>E-mail</dt><dd>{customer.email}</dd></div><div className="full"><dt>Adresse</dt><dd>{customer.address || 'Non renseignee'}</dd></div><div><dt>Total commande</dt><dd>{money(history.reduce((sum, order) => sum + Number(order.total), 0))}</dd></div><div><dt>Fidelite</dt><dd>{points} points</dd></div></dl><footer><button onClick={() => setEditingCustomer(customer)}><Pencil />Modifier</button><button onClick={() => setEditingLoyalty(customer)}><BadgePercent />Points</button><button className="danger-icon" onClick={() => { if (window.confirm(`Supprimer definitivement le compte de ${fullName(customer)} ?`)) deleteCustomerMember(customer) }}><Trash2 /></button></footer></article> })}</div>}
       {tab === 'revenue' && <RevenuePanel staff={staff} orders={orders} cashEntries={cashEntries} />}
       {tab === 'restaurants' && <div className="admin-list editable-list">{restaurants.map(item => <article key={item.id}><div><strong>{item.name}</strong><span>{item.hours || 'Horaires non renseignes'} · {item.phone || 'Telephone non renseigne'} · X {item.x ?? '-'} / Y {item.y ?? '-'} · {item.active ? 'Visible' : 'Masque'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => toggleRestaurant(item)} /><span /></label><button onClick={() => setEditingRestaurant(item)}><Pencil />Modifier</button></div></article>)}</div>}
       {tab === 'promotions' && <><form className="admin-form" onSubmit={addPromotion}><h2>Creer une promotion</h2><div className="form-row"><input required placeholder="Titre" value={draftPromotion.title} onChange={e => setDraftPromotion({ ...draftPromotion, title: e.target.value })} /><input required placeholder="Offre, ex. -20 %" value={draftPromotion.offer} onChange={e => setDraftPromotion({ ...draftPromotion, offer: e.target.value })} /></div><label>Description<textarea required value={draftPromotion.description} onChange={e => setDraftPromotion({ ...draftPromotion, description: e.target.value })} /></label><button className="primary"><Plus />Publier la promotion</button></form><div className="admin-list editable-list">{promotions.map(item => <article key={item.id}><div><strong>{item.title}</strong><span>{item.offer} · {item.description} · {item.active ? 'Active' : 'Masquee'}</span></div><div className="admin-actions"><label className="switch"><input type="checkbox" checked={item.active} onChange={() => togglePromotion(item)} /><span /></label><button onClick={() => setEditingPromotion(item)}><Pencil />Modifier</button><button className="danger-icon" onClick={() => deletePromotion(item.id)}><Trash2 /></button></div></article>)}</div></>}
@@ -743,6 +713,7 @@ function AdminPage({ menu, staff, customers, orders, cashEntries, loyaltyEntries
       {editingPromotion && <PromotionEditModal promotion={editingPromotion} onClose={() => setEditingPromotion(null)} onSave={async values => { await updatePromotion(editingPromotion.id, values); setEditingPromotion(null) }} />}
       {editingTicker && <TickerMessageEditModal ticker={editingTicker} onClose={() => setEditingTicker(null)} onSave={async values => { await updateTickerMessage(editingTicker.id, values); setEditingTicker(null) }} />}
       {editingCustomer && <CustomerEditModal customer={editingCustomer} onClose={() => setEditingCustomer(null)} onSave={async values => { await updateCustomerMember(editingCustomer.id, values); setEditingCustomer(null) }} />}
+      {editingLoyalty && <LoyaltyEditModal customer={editingLoyalty} onClose={() => setEditingLoyalty(null)} onSave={async delta => { await adjustCustomerLoyalty(editingLoyalty.id, delta); setEditingLoyalty(null) }} />}
     </EmployeePage>
   )
 }
@@ -778,6 +749,12 @@ function CustomerEditModal({ customer, onClose, onSave }) {
   return <Modal title="Modifier le client" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(form) }}><div className="form-row"><label>Prenom<input value={form.firstName} onChange={event => setForm({ ...form, firstName: event.target.value })} /></label><label>Nom<input value={form.lastName} onChange={event => setForm({ ...form, lastName: event.target.value })} /></label></div><label>E-mail<input type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} /></label><label>Telephone<input value={form.phone} onChange={event => setForm({ ...form, phone: event.target.value })} /></label><label>Adresse<textarea value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></label><button className="primary"><Save />Enregistrer</button></form></Modal>
 }
 
+function LoyaltyEditModal({ customer, onClose, onSave }) {
+  const current = Number(customer.loyaltyPoints ?? customer.loyalty_points ?? 0)
+  const [delta, setDelta] = useState(10)
+  return <Modal title="Modifier les points fidelite" onClose={onClose}><form className="modal-form" onSubmit={event => { event.preventDefault(); onSave(Number(delta) || 0) }}><p className="modal-note">{fullName(customer)} possede actuellement <strong>{current} points</strong>.</p><label>Points a ajouter ou retirer<input required type="number" step="1" value={delta} onChange={event => setDelta(event.target.value)} /></label><p className="modal-note">Utilisez une valeur negative pour retirer des points.</p><button className="primary"><BadgePercent />Mettre a jour</button></form></Modal>
+}
+
 function SiteIntro({ onFinish }) {
   return (
     <section className="site-intro" aria-label="Intro Up-n-Atom">
@@ -799,52 +776,7 @@ function SiteIntro({ onFinish }) {
 }
 
 function PublicFooter({ navigate }) {
-  const year = new Date().getFullYear()
-  return (
-    <footer className="public-footer">
-      <div className="footer-main">
-        <section className="footer-brand-block">
-          <Brand compact />
-          <p>Le comptoir officiel Up-n-Atom de Roxwood : commandes, promotions, recrutement et service client en un seul endroit.</p>
-          <div className="footer-socials">
-            <button onClick={() => navigate('restaurants')} aria-label="Voir le restaurant"><MapPin size={18} /></button>
-            <button onClick={() => navigate('customer-login')} aria-label="Connexion client"><Users size={18} /></button>
-          </div>
-        </section>
-        <section className="footer-column">
-          <h3>Departements</h3>
-          <button onClick={() => navigate('menu')}>La carte</button>
-          <button onClick={() => navigate('promotions')}>Promotions</button>
-          <button onClick={() => navigate('restaurants')}>Restaurant Roxwood</button>
-          <button onClick={() => navigate('recruitment')}>Recrutement</button>
-          <button onClick={() => navigate('customer-login')}>Compte client</button>
-        </section>
-        <section className="footer-column">
-          <h3>Services populaires</h3>
-          <button onClick={() => navigate('menu')}>Commander en ligne</button>
-          <button onClick={() => navigate('menu')}>Voir les menus</button>
-          <button onClick={() => navigate('customer-account')}>Carte fidelite</button>
-          <button onClick={() => navigate('customer-account')}>Suivre une commande</button>
-          <button onClick={() => navigate('recruitment')}>Postuler a Roxwood</button>
-        </section>
-        <section className="footer-contact">
-          <h3>Contact officiel</h3>
-          <div className="footer-contact-line"><Store size={18} /><span>Up-n-Atom Roxwood, San Andreas</span></div>
-          <div className="footer-contact-line"><ShoppingBag size={18} /><span>Commandes, fidelite et espace equipe</span></div>
-          <button className="footer-emergency" onClick={() => navigate('menu')}>Urgence faim : commandez maintenant</button>
-        </section>
-      </div>
-      <div className="footer-bottom">
-        <span>© {year} UP-N-ATOM HAMBURGERS — TOUS DROITS RESERVES</span>
-        <div className="footer-bottom-links">
-          <button>Accessibilite</button>
-          <button>Confidentialite</button>
-          <button>Conditions d'utilisation</button>
-          <button>Plan du site</button>
-        </div>
-      </div>
-    </footer>
-  )
+  return <footer className="public-footer"><div className="footer-grid"><section className="footer-brand"><Brand compact /><p>Le comptoir officiel Up-n-Atom de Roxwood : commandes, promotions, recrutement et service client en un seul endroit.</p><div className="footer-social"><button aria-label="Commander" onClick={() => navigate('menu')}><ShoppingBag size={18} /></button><button aria-label="Compte client" onClick={() => navigate('customer-login')}><CircleUserRound size={18} /></button></div></section><section><h3>Departements</h3><nav><button onClick={() => navigate('menu')}>La carte</button><button onClick={() => navigate('promos')}>Promotions</button><button onClick={() => navigate('restaurants')}>Restaurant Roxwood</button><button onClick={() => navigate('recruitment')}>Recrutement</button></nav></section><section><h3>Services populaires</h3><nav><button onClick={() => navigate('menu')}>Commander en ligne</button><button onClick={() => navigate('menu')}>Voir les menus</button><button onClick={() => navigate('account')}>Carte fidelite</button><button onClick={() => navigate('account')}>Suivre une commande</button></nav></section><section><h3>Contact officiel</h3><p><MapPin size={17} />Up-n-Atom Roxwood, San Andreas</p><p><ShoppingBag size={17} />Commandes, fidelite et espace equipe</p><button className="footer-cta" onClick={() => navigate('menu')}>FAIM URGENTE : COMMANDEZ</button></section></div><div className="footer-bottom"><span>© 2026 UP-N-ATOM HAMBURGERS — TOUS DROITS RESERVES</span><nav><button>Accessibilite</button><button>Confidentialite</button><button>Conditions d’utilisation</button><button>Plan du site</button></nav></div></footer>
 }
 
 export default function App() {
@@ -858,7 +790,6 @@ export default function App() {
   const [customers, setCustomers] = useState([])
   const [timeEntries, setTimeEntries] = useState([])
   const [cashEntries, setCashEntries] = useState([])
-  const [loyaltyEntries, setLoyaltyEntries] = useState([])
   const [events, setEvents] = useState([])
   const [orders, setOrders] = useState([])
   const [announcements, setAnnouncements] = useState(announcementsSeed)
@@ -879,12 +810,8 @@ export default function App() {
         console.warn('ticker_messages unavailable', error)
         return tickerMessagesSeed
       })
-      const loadLoyaltyEntries = () => loadCollection('loyalty_entries').catch(error => {
-        console.warn('loyalty_entries unavailable', error)
-        return []
-      })
-      const [m, r, s, e, o, a, d, p, t, h, cash, loyalty, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions'].map(loadCollection), loadTickerMessages(), ...['time_entries', 'cash_entries'].map(loadCollection), loadLoyaltyEntries(), loadCollection('applications'), loadCustomers()])
-      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTickerMessages(t); setTimeEntries(h); setCashEntries(cash); setLoyaltyEntries(loyalty); setApplications(apps); setCustomers(c)
+      const [m, r, s, e, o, a, d, p, t, h, cash, apps, c] = await Promise.all([...['menu', 'restaurants', 'staff', 'events', 'orders', 'announcements', 'documents', 'promotions'].map(loadCollection), loadTickerMessages(), ...['time_entries', 'cash_entries', 'applications'].map(loadCollection), loadCustomers()])
+      setMenu(m); setRestaurants(r); setStaff(s); setEvents(e); setOrders(o); setAnnouncements(a); setDocuments(d); setPromotions(p); setTickerMessages(t); setTimeEntries(h); setCashEntries(cash); setApplications(apps); setCustomers(c)
       setSettings(await loadSettings())
     } catch (error) { console.error(error); setToast('Certaines donnees n’ont pas pu etre chargees.') }
   }
@@ -901,7 +828,7 @@ export default function App() {
     if (!supabase) return () => { window.removeEventListener('storage', localRefresh); window.removeEventListener('atom:data', localRefresh) }
 
     const channel = supabase.channel('upnatom-live')
-    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'loyalty_entries', 'applications', 'menu', 'restaurants', 'promotions', 'ticker_messages', 'settings'].forEach(table => {
+    ;['orders', 'staff', 'profiles', 'events', 'announcements', 'documents', 'time_entries', 'cash_entries', 'applications', 'menu', 'restaurants', 'promotions', 'ticker_messages', 'settings'].forEach(table => {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, localRefresh)
     })
     channel.subscribe()
@@ -932,7 +859,34 @@ export default function App() {
     setOrders(current => [form, ...current]); setCustomers(current => current.map(item => item.id === form.customerId ? { ...item, phone: form.phone, address: form.address } : item))
     setCart([]); navigate('account'); setToast(`Commande ${form.id} envoyee.`)
   }
-  const updateOrder = async (id, patch) => { await updateRecord('orders', id, patch); setOrders(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Commande mise a jour.') }
+  const adjustCustomerLoyalty = async (id, delta, silent = false) => {
+    const customer = customers.find(item => item.id === id)
+    if (!customer) return
+    const currentPoints = Number(customer.loyaltyPoints ?? customer.loyalty_points ?? 0)
+    const nextPoints = Math.max(0, currentPoints + Number(delta || 0))
+    await updateCustomer(id, { loyaltyPoints: nextPoints })
+    setCustomers(current => current.map(item => item.id === id ? { ...item, loyaltyPoints: nextPoints } : item))
+    if (user?.id === id) {
+      const nextUser = { ...user, loyaltyPoints: nextPoints }
+      setUser(nextUser)
+      sessionStorage.setItem('atom:user', JSON.stringify(nextUser))
+    }
+    if (!silent) setToast(`Carte fidelite mise a jour : ${nextPoints} points.`)
+  }
+  const updateOrder = async (id, patch) => {
+    const previous = orders.find(item => item.id === id)
+    const nextPatch = { ...patch }
+    if (patch.paid === true && previous && !previous.paid && !(previous.loyaltyAwarded ?? previous.loyalty_awarded)) {
+      const customerId = previous.customerId || previous.customer_id
+      const productTotal = Math.max(0, Number(previous.total || 0) - Number(previous.deliveryFee ?? previous.delivery_fee ?? 0))
+      const earnedPoints = Math.floor(productTotal)
+      if (customerId && earnedPoints > 0) await adjustCustomerLoyalty(customerId, earnedPoints, true)
+      nextPatch.loyaltyAwarded = true
+    }
+    await updateRecord('orders', id, nextPatch)
+    setOrders(current => current.map(item => item.id === id ? { ...item, ...nextPatch } : item))
+    setToast('Commande mise a jour.')
+  }
   const createEvent = async form => { await insertRecord('events', form); setEvents(current => [form, ...current]); setToast('Evenement ajoute au planning.') }
   const changeEvent = async (id, patch) => { await updateRecord('events', id, patch); setEvents(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Evenement modifie.') }
   const removeEvent = async id => { await deleteRecord('events', id); setEvents(current => current.filter(item => item.id !== id)); setToast('Evenement supprime.') }
@@ -941,7 +895,6 @@ export default function App() {
   const updateApplication = async (id, patch) => { await updateRecord('applications', id, patch); setApplications(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Candidature mise a jour.') }
   const submitHours = async form => { await insertRecord('time_entries', form); setTimeEntries(current => [form, ...current]); setToast('Heures enregistrees.') }
   const submitCash = async form => { await insertRecord('cash_entries', form); setCashEntries(current => [form, ...current]); setToast('Encaissement enregistre.') }
-  const submitLoyalty = async form => { const saved = await insertRecord('loyalty_entries', form); setLoyaltyEntries(current => [saved, ...current]); setToast('Carte fidelite mise a jour.') }
   const saveSettings = async value => { await updateSettings(value); setSettings(value); setToast('Etat du service mis a jour.') }
   const createMenuItem = async form => { await insertRecord('menu', form); setMenu(current => [form, ...current]); setToast('Produit ajoute a la carte.') }
   const updateMenuItem = async (id, patch) => { await updateRecord('menu', id, patch); setMenu(current => current.map(item => item.id === id ? { ...item, ...patch } : item)); setToast('Produit mis a jour.') }
@@ -976,9 +929,9 @@ export default function App() {
     if (page === 'employee-documents') content = <DocumentsPage documents={documents} />
     if (page === 'employee-announcements') content = <AnnouncementsPage announcements={announcements} canCreate={canManage(user)} onCreate={createAnnouncement} />
     if (page === 'employee-clock') content = <ClockPage user={user} entries={timeEntries} onSubmit={submitHours} />
-    if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} customers={customers} onSubmit={submitCash} onSubmitLoyalty={submitLoyalty} />
+    if (page === 'employee-cash') content = <CashPage user={user} entries={cashEntries} customers={customers} onSubmit={submitCash} onAddLoyalty={adjustCustomerLoyalty} />
     if (page === 'employee-applications') content = canManage(user) ? <ApplicationsPage applications={applications} onUpdate={updateApplication} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
-    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} loyaltyEntries={loyaltyEntries} restaurants={restaurants} promotions={promotions} tickerMessages={tickerMessages} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} deleteCustomerMember={deleteCustomerMember} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} createTickerMessage={createTickerMessage} updateTickerMessage={updateTickerMessage} deleteTickerMessage={deleteTickerMessage} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
+    if (page === 'employee-admin') content = canManage(user) ? <AdminPage menu={menu} staff={staff} customers={customers} orders={orders} cashEntries={cashEntries} restaurants={restaurants} promotions={promotions} tickerMessages={tickerMessages} settings={settings} createMenuItem={createMenuItem} updateMenuItem={updateMenuItem} deleteMenuItem={deleteMenuItem} createStaff={createStaff} updateStaffMember={updateStaffMember} deleteStaff={deleteStaff} updateCustomerMember={updateCustomerMember} deleteCustomerMember={deleteCustomerMember} adjustCustomerLoyalty={adjustCustomerLoyalty} createRestaurant={createRestaurant} updateRestaurant={updateRestaurant} deleteRestaurant={deleteRestaurant} createPromotion={createPromotion} updatePromotion={updatePromotion} deletePromotion={deletePromotion} createTickerMessage={createTickerMessage} updateTickerMessage={updateTickerMessage} deleteTickerMessage={deleteTickerMessage} saveSettings={saveSettings} /> : <EmployeeDashboard user={user} orders={orders} events={events} announcements={announcements} navigate={navigate} />
     return <>{intro}<EmployeeLayout user={user} page={page} navigate={navigate} logout={logout} newOrders={orders.filter(item => item.status === 'Nouvelle').length}>{content}</EmployeeLayout>{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
   }
 
@@ -990,6 +943,6 @@ export default function App() {
   if (page === 'promos') content = <PromosPage promotions={promotions} />
   if (page === 'restaurants') content = <RestaurantsPage restaurants={restaurants} />
   if (page === 'recruitment') content = <Recruitment restaurants={restaurants} onSubmitApplication={submitApplication} />
-  if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={user} orders={orders} loyaltyEntries={loyaltyEntries} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
+  if (page === 'account') content = user?.roleType === 'customer' ? <CustomerAccount user={customers.find(customer => customer.id === user.id) || user} orders={orders} navigate={navigate} /> : <AuthPage portal="customer" onLogin={login} onRegister={register} navigate={navigate} />
   return <>{intro}<PublicHeader page={page} navigate={navigate} cartCount={cart.reduce((sum, item) => sum + item.quantity, 0)} user={user} logout={logout} tickerMessages={tickerMessages} />{content}<PublicFooter navigate={navigate} />{toast && <Toast message={toast} onClose={() => setToast('')} />}</>
 }

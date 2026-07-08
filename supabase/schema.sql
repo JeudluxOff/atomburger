@@ -11,6 +11,7 @@ create table if not exists profiles (
   role_type text not null default 'customer' check (role_type in ('customer', 'employee')),
   role text,
   permissions jsonb not null default '[]'::jsonb,
+  "loyaltyPoints" integer not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -34,9 +35,10 @@ create table if not exists events (
   "authorId" text, created_at timestamptz not null default now()
 );
 create table if not exists orders (
-  id text primary key, "customerId" uuid references auth.users(id), "customerName" text not null, phone text not null, address text not null,
+  id text primary key, "customerId" uuid references auth.users(id) on delete set null, "customerName" text not null, phone text not null, address text not null,
   "markerX" numeric not null, "markerY" numeric not null, note text, status text not null default 'Nouvelle', "assignedTo" text,
-  paid boolean not null default false, items jsonb not null, "deliveryZone" text default '', "deliveryFee" numeric(10,2) not null default 0, total numeric(10,2) not null, "createdAt" timestamptz not null default now(), created_at timestamptz not null default now()
+  paid boolean not null default false, "deliveryZone" text default '', "deliveryFee" numeric(10,2) not null default 0, "loyaltyAwarded" boolean not null default false,
+  items jsonb not null, total numeric(10,2) not null, "createdAt" timestamptz not null default now(), created_at timestamptz not null default now()
 );
 create table if not exists announcements (
   id text primary key, title text not null, body text not null, priority text, date timestamptz default now(), created_at timestamptz not null default now()
@@ -59,6 +61,9 @@ create table if not exists cash_entries (
   amount numeric(10,2) not null check (amount > 0),
   method text not null default 'Especes',
   note text default '',
+  "customerId" uuid references auth.users(id) on delete set null,
+  "customerName" text default '',
+  "loyaltyPoints" integer not null default 0,
   "createdAt" timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
@@ -76,6 +81,7 @@ create table if not exists applications (
 
 -- Safe upgrades when the schema already existed before this version.
 alter table profiles add column if not exists address text default '';
+alter table profiles add column if not exists "loyaltyPoints" integer not null default 0;
 alter table staff add column if not exists position text default '';
 alter table staff add column if not exists restaurant text default '';
 alter table staff add column if not exists phone text default '';
@@ -84,6 +90,19 @@ alter table menu add column if not exists "imageUrl" text default '';
 alter table orders add column if not exists paid boolean not null default false;
 alter table orders add column if not exists "deliveryZone" text default '';
 alter table orders add column if not exists "deliveryFee" numeric(10,2) not null default 0;
+alter table orders add column if not exists "loyaltyAwarded" boolean not null default false;
+alter table cash_entries add column if not exists "customerId" uuid references auth.users(id) on delete set null;
+alter table cash_entries add column if not exists "customerName" text default '';
+alter table cash_entries add column if not exists "loyaltyPoints" integer not null default 0;
+
+do $$
+begin
+  if exists (select 1 from pg_constraint where conname = 'orders_customerId_fkey') then
+    alter table orders drop constraint "orders_customerId_fkey";
+  end if;
+  alter table orders add constraint "orders_customerId_fkey" foreign key ("customerId") references auth.users(id) on delete set null;
+exception when duplicate_object then null;
+end $$;
 
 create or replace function public.is_employee() returns boolean language sql stable security definer set search_path = public as $$
   select exists(select 1 from profiles where id = auth.uid() and role_type = 'employee');

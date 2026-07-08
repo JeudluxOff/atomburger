@@ -20,7 +20,6 @@ const seeds = {
   promotions: promotionsSeed,
   ticker_messages: tickerMessagesSeed,
   applications: [],
-  loyalty_entries: [],
   settings: { acceptingOrders: true },
 }
 
@@ -32,6 +31,7 @@ const normalizeCustomer = item => ({
   firstName: item.firstName || item.first_name || '',
   lastName: item.lastName || item.last_name || '',
   roleType: 'customer',
+  loyaltyPoints: Number(item.loyaltyPoints ?? item.loyalty_points ?? 0),
 })
 
 function clone(value) {
@@ -171,20 +171,20 @@ export async function signIn(identifier, password, portal) {
       return { ...staff, roleType: 'employee' }
     }
     const savedCustomers = readLocal('customers')
-    const customers = [...customerSeed, ...savedCustomers.filter(user => !customerSeed.some(seed => seed.id === user.id))]
+    const deleted = JSON.parse(localStorage.getItem('atom:deleted_customers') || '[]')
+    const customers = [...customerSeed.filter(user => !deleted.includes(user.id)), ...savedCustomers.filter(user => !customerSeed.some(seed => seed.id === user.id) && !deleted.includes(user.id))]
     const customer = customers.find(user => user.email === identifier && user.password === password)
     if (!customer) throw new Error('Adresse ou mot de passe incorrect.')
     return { ...customer, roleType: 'customer' }
   }
   const { data, error } = await supabase.auth.signInWithPassword({ email: identifier, password })
   if (error) throw error
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).maybeSingle()
+  const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single()
+  if (!profile || (portal === 'employee' && profile.role_type !== 'employee')) throw new Error('Ce compte ne dispose pas de cet acces.')
   if (portal === 'employee') {
     const { data: staffProfile } = await supabase.from('staff').select('*').or(`auth_id.eq.${data.user.id},email.eq.${data.user.email}`).maybeSingle()
-    if (!staffProfile && profile?.role_type !== 'employee') throw new Error('Ce compte ne dispose pas de cet acces.')
-    return { ...(profile || {}), ...(staffProfile || {}), id: staffProfile?.id || profile?.id, auth_id: data.user.id, email: data.user.email, roleType: 'employee' }
+    return { ...profile, ...staffProfile, id: staffProfile?.id || profile.id, auth_id: data.user.id, email: data.user.email, roleType: 'employee' }
   }
-  if (!profile) throw new Error('Ce compte ne dispose pas de cet acces.')
   return { ...profile, email: data.user.email, roleType: profile.role_type }
 }
 
@@ -192,7 +192,7 @@ export async function signUpCustomer(form) {
   if (!supabase) {
     const rows = readLocal('customers')
     if (rows.some(user => user.email === form.email)) throw new Error('Cette adresse est deja utilisee.')
-    const user = { id: crypto.randomUUID(), ...form, roleType: 'customer' }
+    const user = { id: crypto.randomUUID(), ...form, loyaltyPoints: 0, roleType: 'customer' }
     writeLocal('customers', [...rows, user])
     return user
   }
@@ -215,11 +215,33 @@ export async function signOut() {
 export async function loadCustomers() {
   if (!supabase) {
     const saved = readLocal('customers')
-    return [...customerSeed, ...saved.filter(user => !customerSeed.some(seed => seed.id === user.id))]
+    const deleted = JSON.parse(localStorage.getItem('atom:deleted_customers') || '[]')
+    return [...customerSeed.filter(user => !deleted.includes(user.id)), ...saved.filter(user => !customerSeed.some(seed => seed.id === user.id) && !deleted.includes(user.id))]
   }
   const { data, error } = await supabase.from('profiles').select('*').eq('role_type', 'customer').order('created_at', { ascending: false })
   if (error) throw error
   return data.map(normalizeCustomer)
+}
+
+export async function removeCustomer(customer) {
+  const id = typeof customer === 'string' ? customer : customer?.id
+  if (!id) throw new Error('Client invalide.')
+  if (!supabase) {
+    writeLocal('customers', readLocal('customers').filter(item => item.id !== id))
+    const deleted = JSON.parse(localStorage.getItem('atom:deleted_customers') || '[]')
+    if (!deleted.includes(id)) localStorage.setItem('atom:deleted_customers', JSON.stringify([...deleted, id]))
+    return
+  }
+  const { data: session } = await supabase.auth.getSession()
+  const response = await fetch('/api/customer-user', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.session?.access_token}` },
+    body: JSON.stringify({ id }),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}))
+    throw new Error(body.error || 'Suppression impossible.')
+  }
 }
 
 export async function updateCustomer(id, patch) {
@@ -231,21 +253,4 @@ export async function updateCustomer(id, patch) {
   const { data, error } = await supabase.from('profiles').update(patch).eq('id', id).select().single()
   if (error) throw error
   return data
-}
-
-export async function removeCustomer(customer) {
-  if (!supabase) {
-    writeLocal('customers', readLocal('customers').filter(item => item.id !== customer.id))
-    return
-  }
-  const { data: session } = await supabase.auth.getSession()
-  const response = await fetch('/api/customer-user', {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.session?.access_token}` },
-    body: JSON.stringify({ id: customer.id, authId: customer.auth_id || customer.id }),
-  })
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}))
-    throw new Error(body.error || 'Suppression impossible.')
-  }
 }

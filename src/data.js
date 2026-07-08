@@ -35,7 +35,7 @@ export const staffSeed = [
 ]
 
 export const customerSeed = [
-  { id: 'customer-1', email: 'client@atom.sa', password: 'atom', firstName: 'Alex', lastName: 'Walker', phone: '555-0188', address: 'Alta Street, Los Santos', roleType: 'customer' },
+  { id: 'customer-1', email: 'client@atom.sa', password: 'atom', firstName: 'Alex', lastName: 'Walker', phone: '555-0188', address: 'Alta Street, Los Santos', loyaltyPoints: 0, roleType: 'customer' },
 ]
 
 export const eventSeed = [
@@ -46,8 +46,8 @@ export const eventSeed = [
 export const orderSeed = [
   {
     id: 'ATM-2401', customerId: 'customer-demo', customerName: 'Jordan Miller', phone: '555-0142', address: 'Alta Street, pres de Legion Square',
-    markerX: 51, markerY: 80, note: 'Appeler a l arrivee', status: 'Nouvelle', paid: false, assignedTo: '', createdAt: new Date().toISOString(),
-    items: [{ id: 'classic', name: 'Atom Classic', price: 8.9, quantity: 2 }, { id: 'fries', name: 'Frites Atom', price: 3.5, quantity: 1 }], total: 21.3,
+    markerX: 51, markerY: 80, note: 'Appeler a l arrivee', status: 'Nouvelle', paid: false, deliveryZone: 'Los Santos', deliveryFee: 100, loyaltyAwarded: false, assignedTo: '', createdAt: new Date().toISOString(),
+    items: [{ id: 'classic', name: 'Atom Classic', price: 8.9, quantity: 2 }, { id: 'fries', name: 'Frites Atom', price: 3.5, quantity: 1 }], total: 121.3,
   },
 ]
 
